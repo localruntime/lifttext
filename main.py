@@ -11,6 +11,7 @@ import os
 class ImageWithBoxes(QLabel):
     """Custom widget that displays an image with clickable word boxes"""
     word_clicked = Signal(dict)  # Emits word data when a box is clicked
+    zoom_changed = Signal(float)  # Emits current zoom level
 
     def __init__(self):
         super().__init__()
@@ -23,6 +24,17 @@ class ImageWithBoxes(QLabel):
         self.offset_y = 0
         self.setMouseTracking(True)
         self.hovered_word_index = None
+        self.zoom_level = 1.0  # 1.0 = 100%, 2.0 = 200%, etc.
+        self.min_zoom = 0.1
+        self.max_zoom = 10.0
+
+        # Panning support
+        self.pan_offset_x = 0
+        self.pan_offset_y = 0
+        self.is_panning = False
+        self.pan_start_pos = None
+        self.pan_start_offset_x = 0
+        self.pan_start_offset_y = 0
 
     def set_image(self, pixmap):
         """Set the image to display"""
@@ -30,6 +42,9 @@ class ImageWithBoxes(QLabel):
         self.word_data = []
         self.selected_word_index = None
         self.hovered_word_index = None
+        self.zoom_level = 1.0  # Reset zoom when loading new image
+        self.pan_offset_x = 0  # Reset pan when loading new image
+        self.pan_offset_y = 0
         # Debug: Print original image dimensions
         print(f"QPixmap dimensions: {pixmap.width()} x {pixmap.height()}")
         self.update_display()
@@ -42,19 +57,30 @@ class ImageWithBoxes(QLabel):
     def update_display(self):
         """Update the scaled pixmap and display"""
         if self.original_pixmap:
-            # Scale image to fit while maintaining aspect ratio
-            scaled = self.original_pixmap.scaled(
+            # Scale image to fit while maintaining aspect ratio, then apply zoom
+            base_scaled = self.original_pixmap.scaled(
                 self.size(),
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation
             )
-            self.scaled_pixmap = scaled
+
+            # Apply zoom level
+            zoomed_width = int(base_scaled.width() * self.zoom_level)
+            zoomed_height = int(base_scaled.height() * self.zoom_level)
+
+            self.scaled_pixmap = self.original_pixmap.scaled(
+                zoomed_width,
+                zoomed_height,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
 
             # Calculate scale factor and offset for centering
-            self.scale_factor = scaled.width() / self.original_pixmap.width()
-            self.offset_x = (self.width() - scaled.width()) // 2
-            self.offset_y = (self.height() - scaled.height()) // 2
+            self.scale_factor = self.scaled_pixmap.width() / self.original_pixmap.width()
+            self.offset_x = (self.width() - self.scaled_pixmap.width()) // 2
+            self.offset_y = (self.height() - self.scaled_pixmap.height()) // 2
 
+            self.zoom_changed.emit(self.zoom_level)
             self.update()
 
     def resizeEvent(self, event):
@@ -67,12 +93,14 @@ class ImageWithBoxes(QLabel):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # Draw the scaled image centered
+        # Draw the scaled image centered with pan offset
         if self.scaled_pixmap:
-            painter.drawPixmap(self.offset_x, self.offset_y, self.scaled_pixmap)
+            draw_x = self.offset_x + self.pan_offset_x
+            draw_y = self.offset_y + self.pan_offset_y
+            painter.drawPixmap(draw_x, draw_y, self.scaled_pixmap)
 
             # Debug: Print paint info
-            print(f"Painting {len(self.word_data)} word boxes, scale: {self.scale_factor}, offset: ({self.offset_x}, {self.offset_y})")
+            print(f"Painting {len(self.word_data)} word boxes, scale: {self.scale_factor}, offset: ({draw_x}, {draw_y})")
 
             # Draw word boxes
             boxes_drawn = 0
@@ -81,11 +109,11 @@ class ImageWithBoxes(QLabel):
                     bbox = word_info['bbox']
                     print(f"Drawing box {idx}: {bbox}")
 
-                    # Convert bbox coordinates to scaled display coordinates
+                    # Convert bbox coordinates to scaled display coordinates with pan offset
                     scaled_points = []
                     for point in bbox:
-                        x = int(point[0] * self.scale_factor + self.offset_x)
-                        y = int(point[1] * self.scale_factor + self.offset_y)
+                        x = int(point[0] * self.scale_factor + self.offset_x + self.pan_offset_x)
+                        y = int(point[1] * self.scale_factor + self.offset_y + self.pan_offset_y)
                         scaled_points.append(QPoint(x, y))
 
                     print(f"Scaled points: {[(p.x(), p.y()) for p in scaled_points]}")
@@ -121,8 +149,17 @@ class ImageWithBoxes(QLabel):
             print(f"Drew {boxes_drawn} boxes")
 
     def mousePressEvent(self, event):
-        """Handle mouse clicks to detect word box selection"""
-        if event.button() == Qt.LeftButton:
+        """Handle mouse clicks for panning and word box selection"""
+        if event.button() == Qt.MiddleButton or event.button() == Qt.RightButton:
+            # Start panning with middle or right mouse button
+            self.is_panning = True
+            self.pan_start_pos = event.pos()
+            self.pan_start_offset_x = self.pan_offset_x
+            self.pan_start_offset_y = self.pan_offset_y
+            self.setCursor(Qt.ClosedHandCursor)
+            event.accept()
+
+        elif event.button() == Qt.LeftButton:
             click_pos = event.pos()
 
             # Check which word box was clicked (in reverse order for top-most)
@@ -131,11 +168,11 @@ class ImageWithBoxes(QLabel):
                 if 'bbox' in word_info and word_info['bbox']:
                     bbox = word_info['bbox']
 
-                    # Convert bbox to scaled coordinates
+                    # Convert bbox to scaled coordinates with pan offset
                     scaled_points = []
                     for point in bbox:
-                        x = int(point[0] * self.scale_factor + self.offset_x)
-                        y = int(point[1] * self.scale_factor + self.offset_y)
+                        x = int(point[0] * self.scale_factor + self.offset_x + self.pan_offset_x)
+                        y = int(point[1] * self.scale_factor + self.offset_y + self.pan_offset_y)
                         scaled_points.append(QPoint(x, y))
 
                     # Check if click is inside polygon
@@ -145,37 +182,58 @@ class ImageWithBoxes(QLabel):
                         self.update()
                         break
 
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release to end panning"""
+        if event.button() == Qt.MiddleButton or event.button() == Qt.RightButton:
+            if self.is_panning:
+                self.is_panning = False
+                self.setCursor(Qt.ArrowCursor)
+                event.accept()
+
     def mouseMoveEvent(self, event):
-        """Handle mouse hover to highlight word boxes"""
-        hover_pos = event.pos()
-        found_hover = False
+        """Handle mouse move for panning and word box hover"""
+        if self.is_panning:
+            # Update pan offset based on mouse movement
+            current_pos = event.pos()
+            delta_x = current_pos.x() - self.pan_start_pos.x()
+            delta_y = current_pos.y() - self.pan_start_pos.y()
 
-        # Check which word box is hovered (in reverse order for top-most)
-        for idx in range(len(self.word_data) - 1, -1, -1):
-            word_info = self.word_data[idx]
-            if 'bbox' in word_info and word_info['bbox']:
-                bbox = word_info['bbox']
+            self.pan_offset_x = self.pan_start_offset_x + delta_x
+            self.pan_offset_y = self.pan_start_offset_y + delta_y
 
-                # Convert bbox to scaled coordinates
-                scaled_points = []
-                for point in bbox:
-                    x = int(point[0] * self.scale_factor + self.offset_x)
-                    y = int(point[1] * self.scale_factor + self.offset_y)
-                    scaled_points.append(QPoint(x, y))
-
-                # Check if hover is inside polygon
-                if self.point_in_polygon(hover_pos, scaled_points):
-                    if self.hovered_word_index != idx:
-                        self.hovered_word_index = idx
-                        self.setCursor(Qt.PointingHandCursor)
-                        self.update()
-                    found_hover = True
-                    break
-
-        if not found_hover and self.hovered_word_index is not None:
-            self.hovered_word_index = None
-            self.setCursor(Qt.ArrowCursor)
             self.update()
+            event.accept()
+        else:
+            # Handle word box hover
+            hover_pos = event.pos()
+            found_hover = False
+
+            # Check which word box is hovered (in reverse order for top-most)
+            for idx in range(len(self.word_data) - 1, -1, -1):
+                word_info = self.word_data[idx]
+                if 'bbox' in word_info and word_info['bbox']:
+                    bbox = word_info['bbox']
+
+                    # Convert bbox to scaled coordinates with pan offset
+                    scaled_points = []
+                    for point in bbox:
+                        x = int(point[0] * self.scale_factor + self.offset_x + self.pan_offset_x)
+                        y = int(point[1] * self.scale_factor + self.offset_y + self.pan_offset_y)
+                        scaled_points.append(QPoint(x, y))
+
+                    # Check if hover is inside polygon
+                    if self.point_in_polygon(hover_pos, scaled_points):
+                        if self.hovered_word_index != idx:
+                            self.hovered_word_index = idx
+                            self.setCursor(Qt.PointingHandCursor)
+                            self.update()
+                        found_hover = True
+                        break
+
+            if not found_hover and self.hovered_word_index is not None:
+                self.hovered_word_index = None
+                self.setCursor(Qt.ArrowCursor)
+                self.update()
 
     def point_in_polygon(self, point, polygon):
         """Check if a point is inside a polygon using ray casting algorithm"""
@@ -196,6 +254,48 @@ class ImageWithBoxes(QLabel):
             p1 = p2
 
         return inside
+
+    def wheelEvent(self, event):
+        """Handle mouse wheel for zooming"""
+        if self.original_pixmap:
+            # Get mouse position for zoom center
+            delta = event.angleDelta().y()
+
+            # Zoom in/out by 10% per wheel step
+            zoom_factor = 1.1 if delta > 0 else 0.9
+
+            new_zoom = self.zoom_level * zoom_factor
+            new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+
+            if new_zoom != self.zoom_level:
+                self.zoom_level = new_zoom
+                self.update_display()
+
+            event.accept()
+
+    def zoom_in(self):
+        """Zoom in by 20%"""
+        if self.original_pixmap:
+            new_zoom = min(self.max_zoom, self.zoom_level * 1.2)
+            if new_zoom != self.zoom_level:
+                self.zoom_level = new_zoom
+                self.update_display()
+
+    def zoom_out(self):
+        """Zoom out by 20%"""
+        if self.original_pixmap:
+            new_zoom = max(self.min_zoom, self.zoom_level / 1.2)
+            if new_zoom != self.zoom_level:
+                self.zoom_level = new_zoom
+                self.update_display()
+
+    def zoom_reset(self):
+        """Reset zoom to 100% and clear pan offset"""
+        if self.original_pixmap:
+            self.zoom_level = 1.0
+            self.pan_offset_x = 0
+            self.pan_offset_y = 0
+            self.update_display()
 
 
 class OCRWorker(QThread):
@@ -400,6 +500,30 @@ class OCRApp(QMainWindow):
         self.process_btn.setEnabled(False)
         button_layout.addWidget(self.process_btn)
 
+        # Add spacer
+        button_layout.addStretch()
+
+        # Zoom controls
+        zoom_in_btn = QPushButton("Zoom In (+)")
+        zoom_in_btn.clicked.connect(lambda: self.image_widget.zoom_in())
+        zoom_in_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        button_layout.addWidget(zoom_in_btn)
+
+        zoom_out_btn = QPushButton("Zoom Out (-)")
+        zoom_out_btn.clicked.connect(lambda: self.image_widget.zoom_out())
+        zoom_out_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        button_layout.addWidget(zoom_out_btn)
+
+        zoom_reset_btn = QPushButton("Reset Zoom")
+        zoom_reset_btn.clicked.connect(lambda: self.image_widget.zoom_reset())
+        zoom_reset_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        button_layout.addWidget(zoom_reset_btn)
+
+        # Zoom level label
+        self.zoom_label = QLabel("100%")
+        self.zoom_label.setStyleSheet("font-size: 14px; padding: 10px; font-weight: bold;")
+        button_layout.addWidget(self.zoom_label)
+
         main_layout.addLayout(button_layout)
 
         # Content layout (image and text side by side)
@@ -422,6 +546,7 @@ class OCRApp(QMainWindow):
         self.image_widget.setStyleSheet("background-color: #f0f0f0; border: 2px solid #ccc;")
         self.image_widget.setMinimumSize(400, 400)
         self.image_widget.word_clicked.connect(self.on_word_box_clicked)
+        self.image_widget.zoom_changed.connect(self.on_zoom_changed)
 
         scroll_area.setWidget(self.image_widget)
         image_container.addWidget(scroll_area)
@@ -568,6 +693,10 @@ class OCRApp(QMainWindow):
                     details += f"  Point {i+1}: ({point[0]:.1f}, {point[1]:.1f})\n"
 
             self.text_output.setText(details)
+
+    def on_zoom_changed(self, zoom_level):
+        """Update zoom label when zoom level changes"""
+        self.zoom_label.setText(f"{int(zoom_level * 100)}%")
 
     def on_ocr_complete(self, text):
         self.status_label.setText("OCR completed successfully")
