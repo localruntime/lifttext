@@ -1,7 +1,7 @@
 import sys
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QTextEdit,
-                               QFileDialog, QScrollArea, QListWidget, QListWidgetItem)
+                               QFileDialog, QScrollArea, QListWidget, QListWidgetItem, QProgressBar)
 from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont
 from paddleocr import PaddleOCR
@@ -204,6 +204,7 @@ class OCRWorker(QThread):
     words_detected = Signal(list)  # Emits list of word dictionaries
     error = Signal(str)
     progress = Signal(str)
+    progress_value = Signal(int)  # Emits progress percentage (0-100)
     preprocessed_image = Signal(str)  # ADD THIS: Signal to send preprocessed image path
 
     def __init__(self, image_path):
@@ -214,6 +215,7 @@ class OCRWorker(QThread):
     def run(self):
         try:
             # Initialize PaddleOCR v3 with mobile/slim models for fast performance
+            self.progress_value.emit(10)
             self.progress.emit("Initializing PaddleOCR v3 (this may take a while on first run)...")
             self.ocr = PaddleOCR(
                 # Use mobile/slim models for faster performance
@@ -236,6 +238,7 @@ class OCRWorker(QThread):
             )
 
             # Perform OCR (v3 uses predict method)
+            self.progress_value.emit(50)
             self.progress.emit("Running OCR on image...")
             result = self.ocr.predict(self.image_path)
 
@@ -243,6 +246,7 @@ class OCRWorker(QThread):
             print(f"OCR Result type: {type(result)}")
 
             # Extract text from results
+            self.progress_value.emit(80)
             self.progress.emit("Extracting text from results...")
             text_lines = []
             word_data = []
@@ -353,6 +357,7 @@ class OCRWorker(QThread):
             extracted_text = '\n'.join(text_lines) if text_lines else "No text detected in image"
             print(f"Total words extracted: {len(word_data)}")
             self.words_detected.emit(word_data)
+            self.progress_value.emit(100)
             self.finished.emit(extracted_text)
 
         except Exception as e:
@@ -427,6 +432,12 @@ class OCRApp(QMainWindow):
 
         main_layout.addLayout(content_layout)
 
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setStyleSheet("QProgressBar { height: 20px; text-align: center; }")
+        self.progress_bar.setVisible(False)  # Hidden by default
+        main_layout.addWidget(self.progress_bar)
+
         # Status label
         self.status_label = QLabel("Ready")
         self.status_label.setStyleSheet("padding: 5px; background-color: #e8e8e8;")
@@ -471,12 +482,17 @@ class OCRApp(QMainWindow):
         self.text_output.setText("Initializing OCR...")
         self.status_label.setText("Starting OCR process...")
 
+        # Show and reset progress bar
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+
         # Create and start worker thread
         self.ocr_worker = OCRWorker(image_path)
         self.ocr_worker.finished.connect(self.on_ocr_complete)
         self.ocr_worker.words_detected.connect(self.on_words_detected)
         self.ocr_worker.error.connect(self.on_ocr_error)
         self.ocr_worker.progress.connect(self.on_ocr_progress)
+        self.ocr_worker.progress_value.connect(self.on_progress_value_changed)
         self.ocr_worker.preprocessed_image.connect(self.on_preprocessed_image)  # ADD THIS
         self.ocr_worker.start()
 
@@ -493,6 +509,10 @@ class OCRApp(QMainWindow):
     def on_ocr_progress(self, status):
         self.status_label.setText(status)
         self.text_output.setText(f"Processing...\n\n{status}")
+
+    def on_progress_value_changed(self, value):
+        """Update progress bar value"""
+        self.progress_bar.setValue(value)
 
     def on_words_detected(self, words):
         """Set word data on the image widget"""
@@ -529,10 +549,12 @@ class OCRApp(QMainWindow):
 
     def on_ocr_complete(self, text):
         self.status_label.setText("OCR completed successfully")
+        self.progress_bar.setVisible(False)
 
     def on_ocr_error(self, error_msg):
         self.text_output.setText(error_msg)
         self.status_label.setText("OCR failed")
+        self.progress_bar.setVisible(False)
 
 
 def main():
