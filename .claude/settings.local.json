@@ -11,7 +11,8 @@
       "Bash(python:*)",
       "WebSearch",
       "WebFetch(domain:paddlepaddle.github.io)",
-      "WebFetch(domain:www.paddleocr.ai)"
+      "WebFetch(domain:www.paddleocr.ai)",
+      "Bash(defaults delete:*)"
     ],
     "deny": [],
     "ask": []

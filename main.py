@@ -483,23 +483,27 @@ class OCRApp(QMainWindow):
         ]
 
         self.recognition_models = [
-            'en_PP-OCRv4_mobile_rec',
-            'en_PP-OCRv4_server_rec',
-            'en_PP-OCRv5_mobile_rec',
-            'en_PP-OCRv5_server_rec',
-            'ch_PP-OCRv4_mobile_rec',
-            'ch_PP-OCRv4_server_rec',
+            'en_PP-OCRv4_mobile_rec',      # English (fast)
+            'en_PP-OCRv5_mobile_rec',      # English (latest)
+            'PP-OCRv4_mobile_rec',         # Chinese (fast)
+            'PP-OCRv4_server_rec',         # Chinese (high accuracy)
+            'PP-OCRv5_mobile_rec',         # Multi-language (latest, supports CN/EN/JP)
+            'PP-OCRv5_server_rec',         # Multi-language (best accuracy)
         ]
 
-        # Load saved model selections
-        self.selected_det_model = self.settings.value(
+        # Load saved model selections with validation
+        saved_det_model = self.settings.value(
             self.SETTINGS_DET_MODEL,
             self.DEFAULT_DET_MODEL
         )
-        self.selected_rec_model = self.settings.value(
+        saved_rec_model = self.settings.value(
             self.SETTINGS_REC_MODEL,
             self.DEFAULT_REC_MODEL
         )
+
+        # Validate saved models exist in current model lists
+        self.selected_det_model = saved_det_model if saved_det_model in self.detection_models else self.DEFAULT_DET_MODEL
+        self.selected_rec_model = saved_rec_model if saved_rec_model in self.recognition_models else self.DEFAULT_REC_MODEL
 
         # Central widget and main layout
         central_widget = QWidget()
