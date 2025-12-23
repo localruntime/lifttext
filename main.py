@@ -255,23 +255,6 @@ class ImageWithBoxes(QLabel):
 
         return inside
 
-    def wheelEvent(self, event):
-        """Handle mouse wheel for zooming"""
-        if self.original_pixmap:
-            # Get mouse position for zoom center
-            delta = event.angleDelta().y()
-
-            # Zoom in/out by 10% per wheel step
-            zoom_factor = 1.1 if delta > 0 else 0.9
-
-            new_zoom = self.zoom_level * zoom_factor
-            new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
-
-            if new_zoom != self.zoom_level:
-                self.zoom_level = new_zoom
-                self.update_display()
-
-            event.accept()
 
     def zoom_in(self):
         """Zoom in by 20%"""
