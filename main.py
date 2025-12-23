@@ -1,8 +1,8 @@
 import sys
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QTextEdit,
-                               QFileDialog, QScrollArea, QListWidget, QListWidgetItem, QProgressBar)
-from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint
+                               QFileDialog, QScrollArea, QListWidget, QListWidgetItem, QProgressBar, QComboBox)
+from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint, QSettings
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont
 from paddleocr import PaddleOCR
 import os
@@ -290,9 +290,11 @@ class OCRWorker(QThread):
     progress_value = Signal(int)  # Emits progress percentage (0-100)
     preprocessed_image = Signal(str)  # ADD THIS: Signal to send preprocessed image path
 
-    def __init__(self, image_path):
+    def __init__(self, image_path, det_model='PP-OCRv4_mobile_det', rec_model='en_PP-OCRv4_mobile_rec'):
         super().__init__()
         self.image_path = image_path
+        self.det_model = det_model
+        self.rec_model = rec_model
         self.ocr = None
 
     def run(self):
@@ -302,8 +304,8 @@ class OCRWorker(QThread):
             self.progress.emit("Initializing PaddleOCR v3 (this may take a while on first run)...")
             self.ocr = PaddleOCR(
                 # Use mobile/slim models for faster performance
-                text_detection_model_name='PP-OCRv4_mobile_det',      # Mobile detection model
-                text_recognition_model_name='en_PP-OCRv4_mobile_rec', # Mobile recognition model
+                text_detection_model_name=self.det_model,      # Configurable detection model
+                text_recognition_model_name=self.rec_model,    # Configurable recognition model
 
                 # Disable heavy preprocessing for speed
                 use_doc_orientation_classify=False,  # Disable document orientation classification
@@ -456,11 +458,48 @@ class OCRApp(QMainWindow):
         self.image_path = None
         self.ocr_worker = None
         self.word_data = []  # Store detected words data
+
+        # Initialize QSettings for persistence
+        self.settings = QSettings('PaddleOCR', 'ImageTextExtractor')
+
+        # Settings keys
+        self.SETTINGS_DET_MODEL = 'ocr/detection_model'
+        self.SETTINGS_REC_MODEL = 'ocr/recognition_model'
+        self.DEFAULT_DET_MODEL = 'PP-OCRv4_mobile_det'
+        self.DEFAULT_REC_MODEL = 'en_PP-OCRv4_mobile_rec'
+
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle("PaddleOCR Image Text Extractor")
         self.setGeometry(100, 100, 1000, 700)
+
+        # Available models for dropdown menus
+        self.detection_models = [
+            'PP-OCRv4_mobile_det',
+            'PP-OCRv4_server_det',
+            'PP-OCRv5_mobile_det',
+            'PP-OCRv5_server_det',
+        ]
+
+        self.recognition_models = [
+            'en_PP-OCRv4_mobile_rec',
+            'en_PP-OCRv4_server_rec',
+            'en_PP-OCRv5_mobile_rec',
+            'en_PP-OCRv5_server_rec',
+            'ch_PP-OCRv4_mobile_rec',
+            'ch_PP-OCRv4_server_rec',
+        ]
+
+        # Load saved model selections
+        self.selected_det_model = self.settings.value(
+            self.SETTINGS_DET_MODEL,
+            self.DEFAULT_DET_MODEL
+        )
+        self.selected_rec_model = self.settings.value(
+            self.SETTINGS_REC_MODEL,
+            self.DEFAULT_REC_MODEL
+        )
 
         # Central widget and main layout
         central_widget = QWidget()
@@ -482,6 +521,32 @@ class OCRApp(QMainWindow):
         self.process_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         self.process_btn.setEnabled(False)
         button_layout.addWidget(self.process_btn)
+
+        # Detection model selection
+        det_label = QLabel("Detection:")
+        det_label.setStyleSheet("font-size: 12px; padding-left: 10px;")
+        button_layout.addWidget(det_label)
+
+        self.det_model_combo = QComboBox()
+        self.det_model_combo.addItems(self.detection_models)
+        self.det_model_combo.setCurrentText(self.selected_det_model)
+        self.det_model_combo.currentTextChanged.connect(self.on_detection_model_changed)
+        self.det_model_combo.setMaximumWidth(180)
+        self.det_model_combo.setStyleSheet("font-size: 12px; padding: 5px;")
+        button_layout.addWidget(self.det_model_combo)
+
+        # Recognition model selection
+        rec_label = QLabel("Recognition:")
+        rec_label.setStyleSheet("font-size: 12px; padding-left: 10px;")
+        button_layout.addWidget(rec_label)
+
+        self.rec_model_combo = QComboBox()
+        self.rec_model_combo.addItems(self.recognition_models)
+        self.rec_model_combo.setCurrentText(self.selected_rec_model)
+        self.rec_model_combo.currentTextChanged.connect(self.on_recognition_model_changed)
+        self.rec_model_combo.setMaximumWidth(180)
+        self.rec_model_combo.setStyleSheet("font-size: 12px; padding: 5px;")
+        button_layout.addWidget(self.rec_model_combo)
 
         # Add spacer
         button_layout.addStretch()
@@ -617,7 +682,11 @@ class OCRApp(QMainWindow):
         self.progress_bar.setValue(0)
 
         # Create and start worker thread
-        self.ocr_worker = OCRWorker(image_path)
+        self.ocr_worker = OCRWorker(
+            image_path,
+            det_model=self.selected_det_model,
+            rec_model=self.selected_rec_model
+        )
         self.ocr_worker.finished.connect(self.on_ocr_complete)
         self.ocr_worker.words_detected.connect(self.on_words_detected)
         self.ocr_worker.error.connect(self.on_ocr_error)
@@ -693,6 +762,18 @@ class OCRApp(QMainWindow):
         self.progress_bar.setVisible(False)
         # Re-enable process button
         self.process_btn.setEnabled(True)
+
+    def on_detection_model_changed(self, model_name):
+        """Handle detection model selection change"""
+        self.selected_det_model = model_name
+        self.settings.setValue(self.SETTINGS_DET_MODEL, model_name)
+        self.status_label.setText(f"Detection model: {model_name}")
+
+    def on_recognition_model_changed(self, model_name):
+        """Handle recognition model selection change"""
+        self.selected_rec_model = model_name
+        self.settings.setValue(self.SETTINGS_REC_MODEL, model_name)
+        self.status_label.setText(f"Recognition model: {model_name}")
 
 
 def main():

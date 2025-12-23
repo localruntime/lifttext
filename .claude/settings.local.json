@@ -8,7 +8,10 @@
       "Bash(pip show:*)",
       "Bash(source:*)",
       "Bash(pip install:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebSearch",
+      "WebFetch(domain:paddlepaddle.github.io)",
+      "WebFetch(domain:www.paddleocr.ai)"
     ],
     "deny": [],
     "ask": []
