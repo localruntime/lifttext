@@ -213,18 +213,31 @@ class OCRWorker(QThread):
 
     def run(self):
         try:
-            # Initialize PaddleOCR with slim model (smallest and fastest)
-            self.progress.emit("Initializing PaddleOCR (this may take a while on first run)...")
+            # Initialize PaddleOCR v3 with mobile/slim models for fast performance
+            self.progress.emit("Initializing PaddleOCR v3 (this may take a while on first run)...")
             self.ocr = PaddleOCR(
-                use_angle_cls=False,
+                # Use mobile/slim models for faster performance
+                text_detection_model_name='PP-OCRv4_mobile_det',      # Mobile detection model
+                text_recognition_model_name='en_PP-OCRv4_mobile_rec', # Mobile recognition model
+
+                # Disable heavy preprocessing for speed
+                use_doc_orientation_classify=False,  # Disable document orientation classification
+                use_doc_unwarping=False,             # Disable document unwarping
+                use_textline_orientation=False,      # Disable text orientation detection
                 lang='en',
-                det_limit_side_len=480,
-                rec_batch_num=3
+
+                # Detection optimizations (v3 uses text_det_* prefix)
+                text_det_limit_side_len=960,     # Lower for faster processing (480-960 range)
+                text_det_thresh=0.3,             # Detection threshold
+                text_det_box_thresh=0.5,         # Box threshold
+
+                # Recognition optimizations (v3 uses text_recognition_* prefix)
+                text_recognition_batch_size=6    # Batch size (adjust based on available memory)
             )
 
-            # Perform OCR
+            # Perform OCR (v3 uses predict method)
             self.progress.emit("Running OCR on image...")
-            result = self.ocr.ocr(self.image_path)
+            result = self.ocr.predict(self.image_path)
 
             # Debug: Print result structure
             print(f"OCR Result type: {type(result)}")
