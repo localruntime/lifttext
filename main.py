@@ -384,11 +384,23 @@ class OCRApp(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
+        # Button layout
+        button_layout = QHBoxLayout()
+
         # Upload button
         upload_btn = QPushButton("Upload Image")
         upload_btn.clicked.connect(self.upload_image)
         upload_btn.setStyleSheet("font-size: 14px; padding: 10px;")
-        main_layout.addWidget(upload_btn)
+        button_layout.addWidget(upload_btn)
+
+        # Process image button (disabled until image is loaded)
+        self.process_btn = QPushButton("Process Image")
+        self.process_btn.clicked.connect(self.process_image)
+        self.process_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        self.process_btn.setEnabled(False)
+        button_layout.addWidget(self.process_btn)
+
+        main_layout.addLayout(button_layout)
 
         # Content layout (image and text side by side)
         content_layout = QHBoxLayout()
@@ -453,22 +465,22 @@ class OCRApp(QMainWindow):
 
         if file_name:
             self.image_path = file_name
-            self.status_label.setText(f"Loaded: {os.path.basename(file_name)}")
+            self.status_label.setText(f"Loaded: {os.path.basename(file_name)} - Click 'Process Image' to run OCR")
 
             # Load image same way PaddleOCR does
             from PIL import Image
             import numpy as np
-            
+
             pil_image = Image.open(file_name)
             # Convert to RGB if needed
             if pil_image.mode != 'RGB':
                 pil_image = pil_image.convert('RGB')
-            
+
             # Save to temporary file to ensure consistent loading
             import tempfile
             temp_path = tempfile.mktemp(suffix='.png')
             pil_image.save(temp_path)
-            
+
             # Now load into QPixmap
             pixmap = QPixmap(temp_path)
             if not pixmap.isNull():
@@ -476,7 +488,17 @@ class OCRApp(QMainWindow):
                 print(f"Loaded pixmap: {pixmap.width()}x{pixmap.height()}")
 
             self.text_output.clear()
-            self.extract_text(file_name)  # Still use original file
+            self.text_output.setPlaceholderText("Click 'Process Image' to extract text...")
+
+            # Enable the process button now that an image is loaded
+            self.process_btn.setEnabled(True)
+
+    def process_image(self):
+        """Process the currently loaded image with OCR"""
+        if self.image_path:
+            # Disable button while processing
+            self.process_btn.setEnabled(False)
+            self.extract_text(self.image_path)
 
     def extract_text(self, image_path):
         self.text_output.setText("Initializing OCR...")
@@ -550,11 +572,15 @@ class OCRApp(QMainWindow):
     def on_ocr_complete(self, text):
         self.status_label.setText("OCR completed successfully")
         self.progress_bar.setVisible(False)
+        # Re-enable process button
+        self.process_btn.setEnabled(True)
 
     def on_ocr_error(self, error_msg):
         self.text_output.setText(error_msg)
         self.status_label.setText("OCR failed")
         self.progress_bar.setVisible(False)
+        # Re-enable process button
+        self.process_btn.setEnabled(True)
 
 
 def main():
