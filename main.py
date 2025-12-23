@@ -30,6 +30,8 @@ class ImageWithBoxes(QLabel):
         self.word_data = []
         self.selected_word_index = None
         self.hovered_word_index = None
+        # Debug: Print original image dimensions
+        print(f"QPixmap dimensions: {pixmap.width()} x {pixmap.height()}")
         self.update_display()
 
     def set_word_data(self, words):
@@ -202,6 +204,7 @@ class OCRWorker(QThread):
     words_detected = Signal(list)  # Emits list of word dictionaries
     error = Signal(str)
     progress = Signal(str)
+    preprocessed_image = Signal(str)  # ADD THIS: Signal to send preprocessed image path
 
     def __init__(self, image_path):
         super().__init__()
@@ -225,7 +228,6 @@ class OCRWorker(QThread):
 
             # Debug: Print result structure
             print(f"OCR Result type: {type(result)}")
-            print(f"OCR Result: {result}")
 
             # Extract text from results
             self.progress.emit("Extracting text from results...")
@@ -242,7 +244,22 @@ class OCRWorker(QThread):
                 # Handle dictionary format (newer PaddleOCR)
                 elif isinstance(page_result, dict):
                     print(f"Dictionary format detected")
-                    print(f"Keys: {page_result.keys()}")
+                    
+                    # EXTRACT AND SAVE THE PREPROCESSED IMAGE
+                    if 'doc_preprocessor_res' in page_result:
+                        preprocessed_img = page_result['doc_preprocessor_res'].get('output_img')
+                        
+                        if preprocessed_img is not None:
+                            import tempfile
+                            from PIL import Image
+                            
+                            # Save preprocessed image to temp file
+                            temp_path = tempfile.mktemp(suffix='.png')
+                            Image.fromarray(preprocessed_img).save(temp_path)
+                            print(f"Saved preprocessed image to: {temp_path}")
+                            
+                            # Emit signal with preprocessed image path
+                            self.preprocessed_image.emit(temp_path)
 
                     # Extract data from dictionary (try both singular and plural keys)
                     bboxes = page_result.get('dt_polys', [])
@@ -414,13 +431,28 @@ class OCRApp(QMainWindow):
             self.image_path = file_name
             self.status_label.setText(f"Loaded: {os.path.basename(file_name)}")
 
-            # Load and display image
-            pixmap = QPixmap(file_name)
+            # Load image same way PaddleOCR does
+            from PIL import Image
+            import numpy as np
+            
+            pil_image = Image.open(file_name)
+            # Convert to RGB if needed
+            if pil_image.mode != 'RGB':
+                pil_image = pil_image.convert('RGB')
+            
+            # Save to temporary file to ensure consistent loading
+            import tempfile
+            temp_path = tempfile.mktemp(suffix='.png')
+            pil_image.save(temp_path)
+            
+            # Now load into QPixmap
+            pixmap = QPixmap(temp_path)
             if not pixmap.isNull():
                 self.image_widget.set_image(pixmap)
+                print(f"Loaded pixmap: {pixmap.width()}x{pixmap.height()}")
 
             self.text_output.clear()
-            self.extract_text(file_name)
+            self.extract_text(file_name)  # Still use original file
 
     def extract_text(self, image_path):
         self.text_output.setText("Initializing OCR...")
@@ -432,7 +464,18 @@ class OCRApp(QMainWindow):
         self.ocr_worker.words_detected.connect(self.on_words_detected)
         self.ocr_worker.error.connect(self.on_ocr_error)
         self.ocr_worker.progress.connect(self.on_ocr_progress)
+        self.ocr_worker.preprocessed_image.connect(self.on_preprocessed_image)  # ADD THIS
         self.ocr_worker.start()
+
+    def on_preprocessed_image(self, image_path):
+        """Update display with the preprocessed image that OCR actually used"""
+        print(f"Loading preprocessed image: {image_path}")
+        pixmap = QPixmap(image_path)
+        if not pixmap.isNull():
+            self.image_widget.set_image(pixmap)
+            print(f"Loaded preprocessed image: {pixmap.width()}x{pixmap.height()}")
+        else:
+            print("Failed to load preprocessed image")        
 
     def on_ocr_progress(self, status):
         self.status_label.setText(status)
