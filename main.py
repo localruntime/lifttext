@@ -12,6 +12,7 @@ class ImageWithBoxes(QLabel):
     """Custom widget that displays an image with clickable word boxes"""
     word_clicked = Signal(dict)  # Emits word data when a box is clicked
     zoom_changed = Signal(float)  # Emits current zoom level
+    selection_changed = Signal(bool)  # Emits when selection becomes active/inactive
 
     def __init__(self):
         super().__init__()
@@ -35,6 +36,21 @@ class ImageWithBoxes(QLabel):
         self.pan_start_pos = None
         self.pan_start_offset_x = 0
         self.pan_start_offset_y = 0
+
+        # Selection mode state
+        self.selection_mode = False  # Whether selection mode is active
+        self.selection_rect_original = None  # (x, y, w, h) in ORIGINAL image coords (not display coords)
+        self.selection_handles = []  # List of handle rects in display coords (recalculated on paint)
+
+        # Interaction state
+        self.drawing_selection = False  # Currently drawing new selection
+        self.dragging_handle = None  # Which handle is being dragged (0-7 or None)
+        self.moving_selection = False  # Currently moving entire selection
+        self.drag_start_pos = None  # QPoint where drag started (display coords)
+        self.drag_start_rect = None  # Original rect when drag started (original coords)
+
+        # Minimum selection size (prevent too-small selections)
+        self.MIN_SELECTION_SIZE = 20  # pixels in original image space
 
     def set_image(self, pixmap):
         """Set the image to display"""
@@ -148,9 +164,78 @@ class ImageWithBoxes(QLabel):
 
             print(f"Drew {boxes_drawn} boxes")
 
+        # Draw selection rectangle and overlay (if selection exists)
+        if self.selection_rect_original:
+            display_rect = self.get_selection_display_rect()
+
+            if display_rect:
+                # 1. Draw semi-transparent overlay on non-selected area
+                overlay_color = QColor(0, 0, 0, 120)  # Dark overlay
+
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(overlay_color)
+
+                # Draw overlay in 4 rectangles around selection
+                # Top
+                painter.drawRect(QRect(0, 0, self.width(), display_rect.top()))
+                # Bottom
+                painter.drawRect(QRect(0, display_rect.bottom(), self.width(), self.height() - display_rect.bottom()))
+                # Left
+                painter.drawRect(QRect(0, display_rect.top(), display_rect.left(), display_rect.height()))
+                # Right
+                painter.drawRect(QRect(display_rect.right(), display_rect.top(), self.width() - display_rect.right(), display_rect.height()))
+
+                # 2. Draw selection rectangle border
+                # Check if selection is too small (invalid)
+                is_valid = self.validate_selection()
+
+                if is_valid:
+                    border_color = QColor(255, 165, 0)  # Orange for valid selection
+                    border_style = Qt.SolidLine
+                else:
+                    border_color = QColor(255, 0, 0)  # Red for invalid selection
+                    border_style = Qt.DashLine
+
+                pen = QPen(border_color, 3, border_style)
+                painter.setPen(pen)
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRect(display_rect)
+
+                # 3. Draw resize handles (8 handles: corners + midpoints)
+                self.update_selection_handles()  # Recalculate handle positions
+
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(255, 165, 0))  # Orange handles
+
+                for handle_rect in self.selection_handles:
+                    painter.drawRect(handle_rect)
+
+                # 4. Draw size label inside selection (if large enough)
+                if display_rect.width() > 60 and display_rect.height() > 30:
+                    x, y, w, h = self.selection_rect_original
+                    size_text = f"{w} x {h}"
+
+                    painter.setPen(QColor(255, 255, 255))
+                    painter.setFont(QFont("Arial", 12, QFont.Bold))
+                    text_rect = QRect(display_rect.left() + 5, display_rect.top() + 5,
+                                    display_rect.width() - 10, 25)
+
+                    # Draw semi-transparent background for text
+                    painter.fillRect(text_rect, QColor(0, 0, 0, 150))
+                    painter.drawText(text_rect, Qt.AlignCenter, size_text)
+
+                # 5. Draw "too small" warning if invalid
+                if not is_valid:
+                    warning_text = f"Min: {self.MIN_SELECTION_SIZE}px"
+                    painter.setPen(QColor(255, 0, 0))
+                    painter.setFont(QFont("Arial", 14, QFont.Bold))
+                    text_rect = display_rect.adjusted(0, 0, 0, 30)
+                    painter.drawText(text_rect, Qt.AlignCenter, warning_text)
+
     def mousePressEvent(self, event):
-        """Handle mouse clicks for panning and word box selection"""
-        if event.button() == Qt.MiddleButton or event.button() == Qt.RightButton:
+        """Handle mouse clicks for panning, selection, and word box clicking"""
+        # PRIORITY 1: Pan always works (middle/right button)
+        if event.button() in (Qt.MiddleButton, Qt.RightButton):
             # Start panning with middle or right mouse button
             self.is_panning = True
             self.pan_start_pos = event.pos()
@@ -158,8 +243,35 @@ class ImageWithBoxes(QLabel):
             self.pan_start_offset_y = self.pan_offset_y
             self.setCursor(Qt.ClosedHandCursor)
             event.accept()
+            return
 
-        elif event.button() == Qt.LeftButton:
+        # PRIORITY 2: Selection mode (left button)
+        if self.selection_mode and event.button() == Qt.LeftButton:
+            click_pos = event.pos()
+
+            # Check if clicking resize handle (in display coords)
+            handle_idx = self.find_handle_at_pos(click_pos)
+            if handle_idx is not None:
+                self.dragging_handle = handle_idx
+                self.drag_start_pos = click_pos
+                self.drag_start_rect = self.selection_rect_original
+                return
+
+            # Check if clicking inside selection (move)
+            if self.point_in_selection(click_pos):
+                self.moving_selection = True
+                self.drag_start_pos = click_pos
+                self.drag_start_rect = self.selection_rect_original
+                return
+
+            # Otherwise, start new selection
+            self.drawing_selection = True
+            self.drag_start_pos = click_pos
+            self.selection_rect_original = None
+            return
+
+        # PRIORITY 3: Word box clicking (only if NOT in selection mode)
+        if event.button() == Qt.LeftButton:
             click_pos = event.pos()
 
             # Check which word box was clicked (in reverse order for top-most)
@@ -183,15 +295,39 @@ class ImageWithBoxes(QLabel):
                         break
 
     def mouseReleaseEvent(self, event):
-        """Handle mouse release to end panning"""
-        if event.button() == Qt.MiddleButton or event.button() == Qt.RightButton:
+        """Handle mouse release to end panning and finalize selection"""
+        # Handle pan release
+        if event.button() in (Qt.MiddleButton, Qt.RightButton):
             if self.is_panning:
                 self.is_panning = False
                 self.setCursor(Qt.ArrowCursor)
                 event.accept()
+                return
+
+        # Handle selection finalization
+        if event.button() == Qt.LeftButton:
+            if self.drawing_selection or self.moving_selection or self.dragging_handle:
+                # Clamp and validate selection
+                self.clamp_selection_to_image()
+
+                # Emit signal only once on release (emit True if selection exists)
+                has_selection = self.selection_rect_original is not None
+                self.selection_changed.emit(has_selection)
+
+                # Reset interaction state
+                self.drawing_selection = False
+                self.moving_selection = False
+                self.dragging_handle = None
+                self.drag_start_pos = None
+                self.drag_start_rect = None
+
+                self.update_cursor()
+                self.update()
+                return
 
     def mouseMoveEvent(self, event):
-        """Handle mouse move for panning and word box hover"""
+        """Handle mouse move for panning, selection, and word box hover"""
+        # Handle panning first
         if self.is_panning:
             # Update pan offset based on mouse movement
             current_pos = event.pos()
@@ -203,37 +339,66 @@ class ImageWithBoxes(QLabel):
 
             self.update()
             event.accept()
-        else:
-            # Handle word box hover
-            hover_pos = event.pos()
-            found_hover = False
+            return
 
-            # Check which word box is hovered (in reverse order for top-most)
-            for idx in range(len(self.word_data) - 1, -1, -1):
-                word_info = self.word_data[idx]
-                if 'bbox' in word_info and word_info['bbox']:
-                    bbox = word_info['bbox']
+        # Handle selection operations
+        if self.dragging_handle is not None:
+            # Resize selection with constraints
+            self.resize_selection_with_handle(event.pos())
+            self.update_cursor()  # Change cursor based on handle
+            self.update()
+            return
 
-                    # Convert bbox to scaled coordinates with pan offset
-                    scaled_points = []
-                    for point in bbox:
-                        x = int(point[0] * self.scale_factor + self.offset_x + self.pan_offset_x)
-                        y = int(point[1] * self.scale_factor + self.offset_y + self.pan_offset_y)
-                        scaled_points.append(QPoint(x, y))
+        if self.moving_selection:
+            # Move entire selection
+            self.move_selection(event.pos())
+            self.setCursor(Qt.SizeAllCursor)
+            self.update()
+            return
 
-                    # Check if hover is inside polygon
-                    if self.point_in_polygon(hover_pos, scaled_points):
-                        if self.hovered_word_index != idx:
-                            self.hovered_word_index = idx
-                            self.setCursor(Qt.PointingHandCursor)
-                            self.update()
-                        found_hover = True
-                        break
+        if self.drawing_selection:
+            # Expand selection from drag start
+            self.update_selection_from_drag(event.pos())
+            self.update()
+            return
 
-            if not found_hover and self.hovered_word_index is not None:
-                self.hovered_word_index = None
-                self.setCursor(Qt.ArrowCursor)
-                self.update()
+        # Handle hover feedback in selection mode
+        if self.selection_mode:
+            # Update cursor based on position (handle/inside/outside)
+            self.update_cursor()
+            return
+
+        # Fall back to existing word box hover logic
+        # Handle word box hover
+        hover_pos = event.pos()
+        found_hover = False
+
+        # Check which word box is hovered (in reverse order for top-most)
+        for idx in range(len(self.word_data) - 1, -1, -1):
+            word_info = self.word_data[idx]
+            if 'bbox' in word_info and word_info['bbox']:
+                bbox = word_info['bbox']
+
+                # Convert bbox to scaled coordinates with pan offset
+                scaled_points = []
+                for point in bbox:
+                    x = int(point[0] * self.scale_factor + self.offset_x + self.pan_offset_x)
+                    y = int(point[1] * self.scale_factor + self.offset_y + self.pan_offset_y)
+                    scaled_points.append(QPoint(x, y))
+
+                # Check if hover is inside polygon
+                if self.point_in_polygon(hover_pos, scaled_points):
+                    if self.hovered_word_index != idx:
+                        self.hovered_word_index = idx
+                        self.setCursor(Qt.PointingHandCursor)
+                        self.update()
+                    found_hover = True
+                    break
+
+        if not found_hover and self.hovered_word_index is not None:
+            self.hovered_word_index = None
+            self.setCursor(Qt.ArrowCursor)
+            self.update()
 
     def point_in_polygon(self, point, polygon):
         """Check if a point is inside a polygon using ray casting algorithm"""
@@ -280,6 +445,219 @@ class ImageWithBoxes(QLabel):
             self.pan_offset_y = 0
             self.update_display()
 
+    # Coordinate conversion methods for selection tool
+    def display_to_original_coords(self, display_x, display_y):
+        """Convert display coordinates to original image coordinates"""
+        if not self.original_pixmap:
+            return (0, 0)
+
+        orig_x = (display_x - self.offset_x - self.pan_offset_x) / self.scale_factor
+        orig_y = (display_y - self.offset_y - self.pan_offset_y) / self.scale_factor
+        return (int(orig_x), int(orig_y))
+
+    def original_to_display_coords(self, orig_x, orig_y):
+        """Convert original image coordinates to display coordinates"""
+        display_x = int(orig_x * self.scale_factor + self.offset_x + self.pan_offset_x)
+        display_y = int(orig_y * self.scale_factor + self.offset_y + self.pan_offset_y)
+        return (display_x, display_y)
+
+    def get_selection_display_rect(self):
+        """Get selection rectangle in display coordinates (recalculated from original coords)"""
+        if not self.selection_rect_original:
+            return None
+
+        x, y, w, h = self.selection_rect_original
+        dx, dy = self.original_to_display_coords(x, y)
+        dw = int(w * self.scale_factor)
+        dh = int(h * self.scale_factor)
+        return QRect(dx, dy, dw, dh)
+
+    # Selection management methods
+    def set_selection_mode(self, enabled):
+        """Enable/disable selection mode"""
+        self.selection_mode = enabled
+        if not enabled:
+            self.clear_selection()
+            # IMPORTANT: Stop any in-progress dragging
+            self.drawing_selection = False
+            self.moving_selection = False
+            self.dragging_handle = None
+        self.update_cursor()
+        self.update()
+
+    def clear_selection(self):
+        """Clear current selection"""
+        self.selection_rect_original = None
+        self.selection_handles = []
+        self.update()
+
+    # Selection validation methods
+    def clamp_selection_to_image(self):
+        """Ensure selection rect stays within original image bounds"""
+        if not self.selection_rect_original or not self.original_pixmap:
+            return
+
+        x, y, w, h = self.selection_rect_original
+        img_w = self.original_pixmap.width()
+        img_h = self.original_pixmap.height()
+
+        # Clamp position and size
+        x = max(0, min(x, img_w - 1))
+        y = max(0, min(y, img_h - 1))
+        w = min(w, img_w - x)
+        h = min(h, img_h - y)
+
+        self.selection_rect_original = (x, y, max(1, w), max(1, h))
+
+    def validate_selection(self):
+        """Check if selection meets minimum size requirements"""
+        if not self.selection_rect_original:
+            return False
+
+        x, y, w, h = self.selection_rect_original
+        return w >= self.MIN_SELECTION_SIZE and h >= self.MIN_SELECTION_SIZE
+
+    # Handle management methods
+    def update_selection_handles(self):
+        """Update resize handle positions (8 handles: corners + midpoints)"""
+        self.selection_handles = []
+
+        if not self.selection_rect_original:
+            return
+
+        rect = self.get_selection_display_rect()
+        if not rect:
+            return
+
+        handle_size = 10
+        half = handle_size // 2
+
+        # 8 handles: TL, T, TR, R, BR, B, BL, L
+        positions = [
+            (rect.left(), rect.top()),           # 0: Top-left
+            (rect.center().x(), rect.top()),     # 1: Top
+            (rect.right(), rect.top()),          # 2: Top-right
+            (rect.right(), rect.center().y()),   # 3: Right
+            (rect.right(), rect.bottom()),       # 4: Bottom-right
+            (rect.center().x(), rect.bottom()),  # 5: Bottom
+            (rect.left(), rect.bottom()),        # 6: Bottom-left
+            (rect.left(), rect.center().y()),    # 7: Left
+        ]
+
+        for x, y in positions:
+            self.selection_handles.append(QRect(x - half, y - half, handle_size, handle_size))
+
+    def find_handle_at_pos(self, pos):
+        """Find which handle (if any) is at the given position. Returns handle index (0-7) or None"""
+        for idx, handle_rect in enumerate(self.selection_handles):
+            if handle_rect.contains(pos):
+                return idx
+        return None
+
+    def point_in_selection(self, pos):
+        """Check if a display coordinate point is inside the selection rectangle"""
+        rect = self.get_selection_display_rect()
+        return rect.contains(pos) if rect else False
+
+    # Interaction helper methods
+    def update_selection_from_drag(self, current_pos):
+        """Update selection rectangle while drawing (from drag_start_pos to current_pos)"""
+        if not self.drag_start_pos or not self.original_pixmap:
+            return
+
+        # Convert both points to original coords
+        start_orig = self.display_to_original_coords(self.drag_start_pos.x(), self.drag_start_pos.y())
+        end_orig = self.display_to_original_coords(current_pos.x(), current_pos.y())
+
+        # Create rectangle (handle negative dimensions)
+        x1, y1 = start_orig
+        x2, y2 = end_orig
+
+        x = min(x1, x2)
+        y = min(y1, y2)
+        w = abs(x2 - x1)
+        h = abs(y2 - y1)
+
+        self.selection_rect_original = (x, y, w, h)
+        self.update_selection_handles()
+
+    def move_selection(self, current_pos):
+        """Move the entire selection rectangle"""
+        if not self.drag_start_pos or not self.drag_start_rect:
+            return
+
+        # Calculate delta in display coords, then convert to original coords
+        delta_x = current_pos.x() - self.drag_start_pos.x()
+        delta_y = current_pos.y() - self.drag_start_pos.y()
+
+        # Convert delta to original image space
+        delta_orig_x = delta_x / self.scale_factor
+        delta_orig_y = delta_y / self.scale_factor
+
+        x, y, w, h = self.drag_start_rect
+        self.selection_rect_original = (int(x + delta_orig_x), int(y + delta_orig_y), w, h)
+        self.update_selection_handles()
+
+    def resize_selection_with_handle(self, current_pos):
+        """Resize selection by dragging a handle"""
+        if self.dragging_handle is None or not self.drag_start_rect:
+            return
+
+        # Convert current position to original coords
+        curr_orig = self.display_to_original_coords(current_pos.x(), current_pos.y())
+        x, y, w, h = self.drag_start_rect
+
+        # Adjust rectangle based on which handle is being dragged
+        # Handles: 0=TL, 1=T, 2=TR, 3=R, 4=BR, 5=B, 6=BL, 7=L
+        if self.dragging_handle in [0, 6, 7]:  # Left side
+            new_x = curr_orig[0]
+            new_w = (x + w) - new_x
+            x, w = new_x, new_w
+        elif self.dragging_handle in [2, 3, 4]:  # Right side
+            w = curr_orig[0] - x
+
+        if self.dragging_handle in [0, 1, 2]:  # Top side
+            new_y = curr_orig[1]
+            new_h = (y + h) - new_y
+            y, h = new_y, new_h
+        elif self.dragging_handle in [4, 5, 6]:  # Bottom side
+            h = curr_orig[1] - y
+
+        # Normalize (handle negative dimensions)
+        if w < 0:
+            x, w = x + w, abs(w)
+        if h < 0:
+            y, h = y + h, abs(h)
+
+        self.selection_rect_original = (int(x), int(y), int(w), int(h))
+        self.update_selection_handles()
+
+    def update_cursor(self):
+        """Update cursor based on current state and mouse position"""
+        if self.is_panning:
+            self.setCursor(Qt.ClosedHandCursor)
+        elif self.dragging_handle is not None:
+            # Use appropriate resize cursor based on handle
+            cursors = [
+                Qt.SizeFDiagCursor,  # 0: TL
+                Qt.SizeVerCursor,    # 1: T
+                Qt.SizeBDiagCursor,  # 2: TR
+                Qt.SizeHorCursor,    # 3: R
+                Qt.SizeFDiagCursor,  # 4: BR
+                Qt.SizeVerCursor,    # 5: B
+                Qt.SizeBDiagCursor,  # 6: BL
+                Qt.SizeHorCursor,    # 7: L
+            ]
+            self.setCursor(cursors[self.dragging_handle])
+        elif self.moving_selection:
+            self.setCursor(Qt.SizeAllCursor)
+        elif self.selection_mode:
+            self.setCursor(Qt.CrossCursor)
+        elif self.hovered_word_index is not None:
+            self.setCursor(Qt.PointingHandCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+
 
 class OCRWorker(QThread):
     """Worker thread for OCR processing to keep UI responsive"""
@@ -290,11 +668,12 @@ class OCRWorker(QThread):
     progress_value = Signal(int)  # Emits progress percentage (0-100)
     preprocessed_image = Signal(str)  # ADD THIS: Signal to send preprocessed image path
 
-    def __init__(self, image_path, det_model='PP-OCRv4_mobile_det', rec_model='en_PP-OCRv4_mobile_rec'):
+    def __init__(self, image_path, det_model='PP-OCRv4_mobile_det', rec_model='en_PP-OCRv4_mobile_rec', crop_rect=None):
         super().__init__()
         self.image_path = image_path
         self.det_model = det_model
         self.rec_model = rec_model
+        self.crop_rect = crop_rect  # (x, y, width, height) in original image coords
         self.ocr = None
 
     def run(self):
@@ -322,10 +701,35 @@ class OCRWorker(QThread):
                 text_recognition_batch_size=6    # Batch size (adjust based on available memory)
             )
 
-            # Perform OCR (v3 uses predict method)
+            # Load and crop image using PIL (matching existing pattern)
+            from PIL import Image
+            import tempfile
+
+            self.progress.emit("Loading image...")
+            pil_image = Image.open(self.image_path)
+
+            # Convert to RGB if needed
+            if pil_image.mode != 'RGB':
+                pil_image = pil_image.convert('RGB')
+
+            # Crop if crop_rect provided
+            crop_offset_x = 0
+            crop_offset_y = 0
+            if self.crop_rect:
+                x, y, w, h = self.crop_rect
+                crop_offset_x = x
+                crop_offset_y = y
+                self.progress.emit(f"Cropping to region: ({x}, {y}, {w}, {h})...")
+                pil_image = pil_image.crop((x, y, x + w, y + h))
+
+            # Save to temp file (PaddleOCR expects file path, not array)
+            temp_path = tempfile.mktemp(suffix='.png')
+            pil_image.save(temp_path)
+
+            # Perform OCR on temp file (v3 uses predict method)
             self.progress_value.emit(50)
             self.progress.emit("Running OCR on image...")
-            result = self.ocr.predict(self.image_path)
+            result = self.ocr.predict(temp_path)
 
             # Debug: Print result structure
             print(f"OCR Result type: {type(result)}")
@@ -393,8 +797,15 @@ class OCRWorker(QThread):
                             # Convert numpy array or other formats to list
                             if hasattr(bbox, 'tolist'):
                                 bbox = bbox.tolist()
-                            word_entry['bbox'] = bbox
-                            print(f"Word {idx}: '{text_content}' with bbox: {bbox}")
+
+                            # Offset bbox back to full image coordinates if cropped
+                            if self.crop_rect:
+                                adjusted_bbox = [[pt[0] + crop_offset_x, pt[1] + crop_offset_y] for pt in bbox]
+                                word_entry['bbox'] = adjusted_bbox
+                                print(f"Word {idx}: '{text_content}' with bbox (offset): {adjusted_bbox}")
+                            else:
+                                word_entry['bbox'] = bbox
+                                print(f"Word {idx}: '{text_content}' with bbox: {bbox}")
                         else:
                             print(f"Word {idx}: '{text_content}' - NO BBOX")
 
@@ -430,8 +841,15 @@ class OCRWorker(QThread):
                             if bbox:
                                 if hasattr(bbox, 'tolist'):
                                     bbox = bbox.tolist()
-                                word_entry['bbox'] = bbox
-                                print(f"Word {idx}: '{text_content}' with bbox: {bbox}")
+
+                                # Offset bbox back to full image coordinates if cropped
+                                if self.crop_rect:
+                                    adjusted_bbox = [[pt[0] + crop_offset_x, pt[1] + crop_offset_y] for pt in bbox]
+                                    word_entry['bbox'] = adjusted_bbox
+                                    print(f"Word {idx}: '{text_content}' with bbox (offset): {adjusted_bbox}")
+                                else:
+                                    word_entry['bbox'] = bbox
+                                    print(f"Word {idx}: '{text_content}' with bbox: {bbox}")
                             else:
                                 print(f"Word {idx}: '{text_content}' - NO BBOX")
 
@@ -458,6 +876,10 @@ class OCRApp(QMainWindow):
         self.image_path = None
         self.ocr_worker = None
         self.word_data = []  # Store detected words data
+
+        # Selection tracking
+        self.current_crop_rect = None  # Track active crop for coordinate adjustment
+        self.is_processing_selection = False  # Prevent conflicts during selection OCR
 
         # Initialize QSettings for persistence
         self.settings = QSettings('PaddleOCR', 'ImageTextExtractor')
@@ -525,6 +947,28 @@ class OCRApp(QMainWindow):
         self.process_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         self.process_btn.setEnabled(False)
         button_layout.addWidget(self.process_btn)
+
+        # Selection mode toggle button
+        self.select_area_btn = QPushButton("Select Area")
+        self.select_area_btn.setCheckable(True)
+        self.select_area_btn.clicked.connect(self.toggle_selection_mode)
+        self.select_area_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        self.select_area_btn.setEnabled(False)  # Disabled until image is loaded
+        button_layout.addWidget(self.select_area_btn)
+
+        # Process selection button
+        self.process_selection_btn = QPushButton("Process Selection")
+        self.process_selection_btn.clicked.connect(self.process_selection)
+        self.process_selection_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        self.process_selection_btn.setEnabled(False)  # Enabled when selection exists
+        button_layout.addWidget(self.process_selection_btn)
+
+        # Clear selection button
+        self.clear_selection_btn = QPushButton("Clear Selection")
+        self.clear_selection_btn.clicked.connect(self.clear_selection)
+        self.clear_selection_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        self.clear_selection_btn.setEnabled(False)
+        button_layout.addWidget(self.clear_selection_btn)
 
         # Detection model selection
         det_label = QLabel("Detection:")
@@ -599,6 +1043,7 @@ class OCRApp(QMainWindow):
         self.image_widget.setMinimumSize(400, 400)
         self.image_widget.word_clicked.connect(self.on_word_box_clicked)
         self.image_widget.zoom_changed.connect(self.on_zoom_changed)
+        self.image_widget.selection_changed.connect(self.on_selection_changed)
 
         scroll_area.setWidget(self.image_widget)
         image_container.addWidget(scroll_area)
@@ -667,8 +1112,9 @@ class OCRApp(QMainWindow):
             self.text_output.clear()
             self.text_output.setPlaceholderText("Click 'Process Image' to extract text...")
 
-            # Enable the process button now that an image is loaded
+            # Enable the process and select buttons now that an image is loaded
             self.process_btn.setEnabled(True)
+            self.select_area_btn.setEnabled(True)
 
     def process_image(self):
         """Process the currently loaded image with OCR"""
@@ -701,13 +1147,19 @@ class OCRApp(QMainWindow):
 
     def on_preprocessed_image(self, image_path):
         """Update display with the preprocessed image that OCR actually used"""
+        # IMPORTANT: Don't replace image when processing selection
+        # (selection coordinates won't align with preprocessed image)
+        if self.is_processing_selection:
+            print("Skipping preprocessed image display (selection mode)")
+            return
+
         print(f"Loading preprocessed image: {image_path}")
         pixmap = QPixmap(image_path)
         if not pixmap.isNull():
             self.image_widget.set_image(pixmap)
             print(f"Loaded preprocessed image: {pixmap.width()}x{pixmap.height()}")
         else:
-            print("Failed to load preprocessed image")        
+            print("Failed to load preprocessed image")
 
     def on_ocr_progress(self, status):
         self.status_label.setText(status)
@@ -757,15 +1209,21 @@ class OCRApp(QMainWindow):
     def on_ocr_complete(self, text):
         self.status_label.setText("OCR completed successfully")
         self.progress_bar.setVisible(False)
-        # Re-enable process button
+        # Re-enable buttons
         self.process_btn.setEnabled(True)
+        self.select_area_btn.setEnabled(True)
+        # Reset processing flag
+        self.is_processing_selection = False
 
     def on_ocr_error(self, error_msg):
         self.text_output.setText(error_msg)
         self.status_label.setText("OCR failed")
         self.progress_bar.setVisible(False)
-        # Re-enable process button
+        # Re-enable buttons
         self.process_btn.setEnabled(True)
+        self.select_area_btn.setEnabled(True)
+        # Reset processing flag
+        self.is_processing_selection = False
 
     def on_detection_model_changed(self, model_name):
         """Handle detection model selection change"""
@@ -778,6 +1236,95 @@ class OCRApp(QMainWindow):
         self.selected_rec_model = model_name
         self.settings.setValue(self.SETTINGS_REC_MODEL, model_name)
         self.status_label.setText(f"Recognition model: {model_name}")
+
+    # Selection mode methods
+    def toggle_selection_mode(self, enabled):
+        """Handle selection mode toggle"""
+        self.image_widget.set_selection_mode(enabled)
+
+        # Update button states
+        if enabled:
+            # Entering selection mode
+            self.process_btn.setEnabled(False)  # Disable full image processing
+            self.status_label.setText("Selection mode active - draw a rectangle on the image")
+        else:
+            # Exiting selection mode
+            self.process_btn.setEnabled(True)  # Re-enable full processing
+            self.status_label.setText("Selection mode disabled")
+
+    def process_selection(self):
+        """Process the selected area with OCR"""
+        if not self.image_widget.selection_rect_original:
+            return
+
+        # Validate selection size
+        if not self.image_widget.validate_selection():
+            self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px")
+            return
+
+        crop_rect = self.image_widget.selection_rect_original
+        if crop_rect and self.image_path:
+            # Clear previous word boxes before processing
+            self.image_widget.set_word_data([])
+            self.extract_text_from_crop(self.image_path, crop_rect)
+
+    def extract_text_from_crop(self, image_path, crop_rect):
+        """Start OCR worker with crop parameters"""
+        self.text_output.setText("Initializing OCR for selected area...")
+        self.status_label.setText(f"Processing selection: {crop_rect}...")
+
+        # Store crop rect for reference
+        self.current_crop_rect = crop_rect
+        self.is_processing_selection = True
+
+        # Show and reset progress bar
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+
+        # Disable buttons during processing
+        self.process_selection_btn.setEnabled(False)
+        self.select_area_btn.setEnabled(False)
+
+        # Create and start worker thread with crop parameters
+        self.ocr_worker = OCRWorker(
+            image_path,
+            det_model=self.selected_det_model,
+            rec_model=self.selected_rec_model,
+            crop_rect=crop_rect  # Pass crop parameters
+        )
+
+        # Connect signals (same as full image processing)
+        self.ocr_worker.finished.connect(self.on_ocr_complete)
+        self.ocr_worker.words_detected.connect(self.on_words_detected)
+        self.ocr_worker.error.connect(self.on_ocr_error)
+        self.ocr_worker.progress.connect(self.on_ocr_progress)
+        self.ocr_worker.progress_value.connect(self.on_progress_value_changed)
+        self.ocr_worker.preprocessed_image.connect(self.on_preprocessed_image)
+
+        self.ocr_worker.start()
+
+    def clear_selection(self):
+        """Clear the selection and return to normal mode"""
+        self.image_widget.clear_selection()
+        self.image_widget.set_selection_mode(False)
+        self.select_area_btn.setChecked(False)
+        self.process_btn.setEnabled(True)
+        self.current_crop_rect = None
+        self.is_processing_selection = False
+        self.status_label.setText("Selection cleared")
+
+    def on_selection_changed(self, has_selection):
+        """Enable/disable selection-related buttons when selection state changes"""
+        # Enable process/clear buttons only if selection is valid
+        is_valid = has_selection and self.image_widget.validate_selection()
+        self.process_selection_btn.setEnabled(is_valid)
+        self.clear_selection_btn.setEnabled(has_selection)
+
+        if has_selection and not is_valid:
+            self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px")
+        elif has_selection:
+            x, y, w, h = self.image_widget.selection_rect_original
+            self.status_label.setText(f"Selection: {w}x{h}px at ({x}, {y}) - Click 'Process Selection' to run OCR")
 
 
 def main():
