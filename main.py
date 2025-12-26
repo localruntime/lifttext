@@ -1343,6 +1343,11 @@ class OCRApp(QMainWindow):
         self.text_output.setPlaceholderText("Extracted text will appear here...")
         text_container.addWidget(self.text_output)
 
+        # Copy to clipboard button
+        copy_btn = QPushButton("Copy to Clipboard")
+        copy_btn.clicked.connect(self.copy_to_clipboard)
+        text_container.addWidget(copy_btn)
+
         # ===== ASSEMBLE SPLITTER =====
         self.content_splitter.addWidget(self.explorer_widget)
         self.content_splitter.addWidget(image_panel)
@@ -1517,24 +1522,15 @@ class OCRApp(QMainWindow):
         if not words:
             self.text_output.setText("No words detected in image")
         else:
-            # Count words with bounding boxes
-            words_with_bbox = sum(1 for w in words if 'bbox' in w and w['bbox'])
-            self.text_output.setText(f"Detected {len(words)} word(s) ({words_with_bbox} with bounding boxes). Click on a word box to see details.")
+            # Show all detected text concatenated together
+            all_text = '\n'.join(word.get('text', '') for word in words)
+            self.text_output.setText(all_text)
 
     def on_word_box_clicked(self, word_info):
-        """Display word details when a word box is clicked"""
+        """Display word when a word box is clicked"""
         if word_info:
-            details = f"Word: {word_info.get('text', 'N/A')}\n"
-            details += f"Confidence: {word_info.get('confidence', 'N/A')}\n"
-            details += f"Index: {word_info.get('index', 'N/A')}\n"
-
-            if 'bbox' in word_info and word_info['bbox']:
-                details += f"\nBounding Box:\n"
-                bbox = word_info['bbox']
-                for i, point in enumerate(bbox):
-                    details += f"  Point {i+1}: ({point[0]:.1f}, {point[1]:.1f})\n"
-
-            self.text_output.setText(details)
+            # Show only the word text
+            self.text_output.setText(word_info.get('text', ''))
 
     def on_zoom_changed(self, zoom_level):
         """Update zoom label when zoom level changes"""
@@ -1558,6 +1554,16 @@ class OCRApp(QMainWindow):
         self.select_area_btn.setEnabled(True)
         # Reset processing flag
         self.is_processing_selection = False
+
+    def copy_to_clipboard(self):
+        """Copy the extracted text to the clipboard"""
+        text = self.text_output.toPlainText()
+        if text:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(text)
+            self.status_label.setText("Text copied to clipboard")
+        else:
+            self.status_label.setText("No text to copy")
 
     def show_settings_dialog(self):
         """Show the settings dialog"""
