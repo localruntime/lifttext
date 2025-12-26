@@ -5,8 +5,9 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QDialog, QFormLayout, QDialogButtonBox, QGroupBox,
                                QSplitter, QTreeView, QFileSystemModel)
 from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint, QSettings, QDir
-from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont
+from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont, QIcon
 from paddleocr import PaddleOCR
+from qt_material_icons import MaterialIcon
 import os
 
 
@@ -798,18 +799,19 @@ class OCRWorker(QThread):
                 text_detection_model_name=self.det_model,      # Configurable detection model
                 text_recognition_model_name=self.rec_model,    # Configurable recognition model
 
-                # Disable heavy preprocessing for speed
+                # Enable preprocessing for better accuracy
                 use_doc_orientation_classify=False,  # Disable document orientation classification
                 use_doc_unwarping=False,             # Disable document unwarping
-                use_textline_orientation=False,      # Disable text orientation detection
+                use_textline_orientation=True,       # Enable text orientation detection for better recognition
                 lang=self.language,
 
-                # Detection optimizations (v3 uses text_det_* prefix)
-                text_det_limit_side_len=960,     # Lower for faster processing (480-960 range)
-                text_det_thresh=0.3,             # Detection threshold
-                text_det_box_thresh=0.5,         # Box threshold
+                # Detection parameters optimized for accuracy
+                text_det_limit_side_len=1280,    # Higher resolution for better quality (increased from 960)
+                text_det_thresh=0.5,             # Higher threshold for more confident detection (increased from 0.3)
+                text_det_box_thresh=0.6,         # Higher box threshold for accuracy (increased from 0.5)
+                det_db_unclip_ratio=1.5,         # Conservative box expansion for accurate crops (reduced from 3.0)
 
-                # Recognition optimizations (v3 uses text_recognition_* prefix)
+                # Recognition parameters for accuracy
                 text_recognition_batch_size=6    # Batch size (adjust based on available memory)
             )
 
@@ -1286,15 +1288,21 @@ class OCRApp(QMainWindow):
         button_layout.addStretch()
 
         # Zoom controls
-        zoom_in_btn = QPushButton("Zoom In (+)")
+        zoom_in_btn = QPushButton()
+        zoom_in_btn.setIcon(MaterialIcon('zoom_in'))
+        zoom_in_btn.setToolTip("Zoom In (+)")
         zoom_in_btn.clicked.connect(lambda: self.image_widget.zoom_in())
         button_layout.addWidget(zoom_in_btn)
 
-        zoom_out_btn = QPushButton("Zoom Out (-)")
+        zoom_out_btn = QPushButton()
+        zoom_out_btn.setIcon(MaterialIcon('zoom_out'))
+        zoom_out_btn.setToolTip("Zoom Out (-)")
         zoom_out_btn.clicked.connect(lambda: self.image_widget.zoom_out())
         button_layout.addWidget(zoom_out_btn)
 
-        zoom_reset_btn = QPushButton("Reset Zoom")
+        zoom_reset_btn = QPushButton()
+        zoom_reset_btn.setIcon(MaterialIcon('zoom_out_map'))
+        zoom_reset_btn.setToolTip("Reset Zoom")
         zoom_reset_btn.clicked.connect(lambda: self.image_widget.zoom_reset())
         button_layout.addWidget(zoom_reset_btn)
 

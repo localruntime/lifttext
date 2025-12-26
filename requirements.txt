@@ -3,3 +3,4 @@ paddleocr>=3.0.0
 paddlepaddle>=3.0.0
 Pillow>=10.0.0
 qt-material>=2.14
+qt-material-icons>=0.4.0
