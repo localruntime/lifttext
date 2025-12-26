@@ -2,8 +2,9 @@ import sys
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QTextEdit,
                                QFileDialog, QScrollArea, QListWidget, QListWidgetItem, QProgressBar, QComboBox,
-                               QDialog, QFormLayout, QDialogButtonBox, QGroupBox)
-from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint, QSettings
+                               QDialog, QFormLayout, QDialogButtonBox, QGroupBox,
+                               QSplitter, QTreeView, QFileSystemModel)
+from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint, QSettings, QDir
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont
 from paddleocr import PaddleOCR
 import os
@@ -660,6 +661,107 @@ class ImageWithBoxes(QLabel):
             self.setCursor(Qt.ArrowCursor)
 
 
+class FileExplorerWidget(QWidget):
+    """File explorer widget with image file filtering"""
+    file_selected = Signal(str)  # Emits absolute file path when image selected
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.settings = None  # Set by parent
+        self.current_directory = QDir.homePath()
+        self.init_ui()
+
+    def init_ui(self):
+        """Initialize the file explorer UI"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Header label
+        label = QLabel("File Explorer")
+        layout.addWidget(label)
+
+        # File system model
+        self.file_model = QFileSystemModel()
+        self.file_model.setRootPath(QDir.rootPath())
+
+        # Image file filters (only show these extensions)
+        self.file_model.setNameFilters([
+            '*.png', '*.PNG',
+            '*.jpg', '*.JPG', '*.jpeg', '*.JPEG',
+            '*.bmp', '*.BMP',
+            '*.gif', '*.GIF',
+            '*.tiff', '*.TIFF', '*.tif', '*.TIF'
+        ])
+        self.file_model.setNameFilterDisables(False)  # Hide non-matching files
+
+        # Tree view
+        self.tree_view = QTreeView()
+        self.tree_view.setModel(self.file_model)
+        # Don't set root index - allow navigation to entire file system
+        # self.tree_view.setRootIndex(self.file_model.index(QDir.homePath()))
+
+        # Configure tree view appearance
+        self.tree_view.setAnimated(True)
+        self.tree_view.setIndentation(20)
+        self.tree_view.setSortingEnabled(True)
+        self.tree_view.sortByColumn(0, Qt.AscendingOrder)
+
+        # Hide unnecessary columns (keep only name column visible)
+        self.tree_view.setHeaderHidden(False)
+        self.tree_view.hideColumn(1)  # Size
+        self.tree_view.hideColumn(2)  # Type
+        self.tree_view.hideColumn(3)  # Date modified
+
+        # Single selection mode
+        self.tree_view.setSelectionMode(QTreeView.SingleSelection)
+
+        # Connect single-click signal
+        self.tree_view.clicked.connect(self.on_item_clicked)
+
+        layout.addWidget(self.tree_view)
+
+        # Set minimum width for explorer panel
+        self.setMinimumWidth(150)
+
+    def on_item_clicked(self, index):
+        """Handle item click - emit signal only for files (not directories)"""
+        file_path = self.file_model.filePath(index)
+
+        # Only emit signal for image files, not directories
+        if os.path.isfile(file_path):
+            self.current_directory = os.path.dirname(file_path)
+            self.file_selected.emit(file_path)
+
+    def set_root_path(self, path):
+        """Navigate to and expand the given path in the explorer"""
+        if os.path.exists(path):
+            # If path is a file, use its directory
+            if os.path.isfile(path):
+                path = os.path.dirname(path)
+            self.current_directory = path
+
+            # Expand to and scroll to the directory instead of restricting view
+            index = self.file_model.index(path)
+            self.tree_view.expand(index)
+            self.tree_view.scrollTo(index)
+            self.tree_view.setCurrentIndex(index)
+
+    def get_current_directory(self):
+        """Return current directory path for use by file dialog"""
+        return self.current_directory
+
+    def restore_last_directory(self, settings):
+        """Load last used directory from QSettings"""
+        self.settings = settings
+        saved_dir = settings.value('ui/explorer_last_directory', QDir.homePath())
+        self.set_root_path(saved_dir)
+
+    def save_current_directory(self, settings):
+        """Save current directory to QSettings for persistence"""
+        if self.current_directory:
+            settings.setValue('ui/explorer_last_directory', self.current_directory)
+
+
 class OCRWorker(QThread):
     """Worker thread for OCR processing to keep UI responsive"""
     finished = Signal(str)
@@ -1056,10 +1158,14 @@ class OCRApp(QMainWindow):
         self.SETTINGS_REC_MODEL = 'ocr/recognition_model'
         self.SETTINGS_LANGUAGE = 'ocr/language'
         self.SETTINGS_THEME = 'ui/theme'
+        self.SETTINGS_EXPLORER_DIR = 'ui/explorer_last_directory'
+        self.SETTINGS_SPLITTER_SIZES = 'ui/splitter_sizes'
         self.DEFAULT_DET_MODEL = 'PP-OCRv4_mobile_det'
         self.DEFAULT_REC_MODEL = 'en_PP-OCRv4_mobile_rec'
         self.DEFAULT_LANGUAGE = 'en'
         self.DEFAULT_THEME = 'light_blue.xml'
+        self.DEFAULT_EXPLORER_DIR = str(QDir.homePath())
+        self.DEFAULT_SPLITTER_SIZES = [200, 450, 350]
 
         self.init_ui()
 
@@ -1189,11 +1295,20 @@ class OCRApp(QMainWindow):
 
         main_layout.addLayout(button_layout)
 
-        # Content layout (image and text side by side)
-        content_layout = QHBoxLayout()
+        # Create QSplitter for 3-panel resizable layout
+        self.content_splitter = QSplitter(Qt.Horizontal)
 
-        # Image with word boxes display area
-        image_container = QVBoxLayout()
+        # ===== LEFT PANEL: File Explorer =====
+        self.explorer_widget = FileExplorerWidget(self)
+        self.explorer_widget.file_selected.connect(self.on_file_selected)
+        self.explorer_widget.restore_last_directory(self.settings)
+
+        # ===== CENTER PANEL: Image Viewer =====
+        image_panel = QWidget()
+        image_container = QVBoxLayout(image_panel)
+        image_container.setContentsMargins(5, 5, 5, 5)
+
+        # Image label
         image_label = QLabel("Image with Detected Words")
         image_container.addWidget(image_label)
 
@@ -1213,21 +1328,48 @@ class OCRApp(QMainWindow):
         scroll_area.setWidget(self.image_widget)
         image_container.addWidget(scroll_area)
 
-        content_layout.addLayout(image_container)
+        # ===== RIGHT PANEL: Text Output =====
+        text_panel = QWidget()
+        text_container = QVBoxLayout(text_panel)
+        text_container.setContentsMargins(5, 5, 5, 5)
 
-        # Text output area
-        text_container = QVBoxLayout()
+        # Text label
         text_label = QLabel("Extracted Text")
         text_container.addWidget(text_label)
 
+        # Text output area
         self.text_output = QTextEdit()
         self.text_output.setReadOnly(True)
         self.text_output.setPlaceholderText("Extracted text will appear here...")
         text_container.addWidget(self.text_output)
 
-        content_layout.addLayout(text_container)
+        # ===== ASSEMBLE SPLITTER =====
+        self.content_splitter.addWidget(self.explorer_widget)
+        self.content_splitter.addWidget(image_panel)
+        self.content_splitter.addWidget(text_panel)
 
-        main_layout.addLayout(content_layout)
+        # Set initial sizes (20%, 45%, 35%)
+        saved_sizes = self.settings.value(
+            self.SETTINGS_SPLITTER_SIZES,
+            self.DEFAULT_SPLITTER_SIZES
+        )
+        # Handle QSettings returning string instead of list
+        if isinstance(saved_sizes, str):
+            saved_sizes = [int(x) for x in saved_sizes.split(',')]
+        elif not isinstance(saved_sizes, list):
+            saved_sizes = self.DEFAULT_SPLITTER_SIZES
+        self.content_splitter.setSizes(saved_sizes)
+
+        # Make explorer collapsible, but keep image/text fixed
+        self.content_splitter.setCollapsible(0, True)   # Explorer can collapse
+        self.content_splitter.setCollapsible(1, False)  # Image cannot collapse
+        self.content_splitter.setCollapsible(2, False)  # Text cannot collapse
+
+        # Connect splitter moved signal for persistence
+        self.content_splitter.splitterMoved.connect(self.on_splitter_moved)
+
+        # Add splitter to main layout
+        main_layout.addWidget(self.content_splitter)
 
         # Progress bar
         self.progress_bar = QProgressBar()
@@ -1240,43 +1382,72 @@ class OCRApp(QMainWindow):
         main_layout.addWidget(self.status_label)
 
     def upload_image(self):
+        """Upload image via file dialog (alternative to explorer)"""
+        # Start dialog in current explorer directory (better UX)
         file_name, _ = QFileDialog.getOpenFileName(
             self,
             "Select Image",
-            "",
-            "Image Files (*.png *.jpg *.jpeg *.bmp);;All Files (*)"
+            self.explorer_widget.get_current_directory(),
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.gif *.tiff);;All Files (*)"
         )
 
         if file_name:
-            self.image_path = file_name
-            self.status_label.setText(f"Loaded: {os.path.basename(file_name)} - Click 'Process Image' to run OCR")
+            # Reuse shared loading logic
+            self.load_image_from_path(file_name)
 
-            # Load image same way PaddleOCR does
-            from PIL import Image
-            import numpy as np
+            # Update explorer to show selected file's directory
+            self.explorer_widget.set_root_path(os.path.dirname(file_name))
+            self.explorer_widget.save_current_directory(self.settings)
 
-            pil_image = Image.open(file_name)
-            # Convert to RGB if needed
-            if pil_image.mode != 'RGB':
-                pil_image = pil_image.convert('RGB')
+    def on_file_selected(self, file_path):
+        """Handle file selection from explorer (single-click loading)"""
+        if os.path.exists(file_path) and self.is_valid_image_file(file_path):
+            self.load_image_from_path(file_path)
+            self.explorer_widget.save_current_directory(self.settings)
 
-            # Save to temporary file to ensure consistent loading
-            import tempfile
-            temp_path = tempfile.mktemp(suffix='.png')
-            pil_image.save(temp_path)
+    def is_valid_image_file(self, file_path):
+        """Check if file is a valid image based on extension"""
+        valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.tif')
+        return file_path.lower().endswith(valid_extensions)
 
-            # Now load into QPixmap
-            pixmap = QPixmap(temp_path)
-            if not pixmap.isNull():
-                self.image_widget.set_image(pixmap)
-                print(f"Loaded pixmap: {pixmap.width()}x{pixmap.height()}")
+    def load_image_from_path(self, file_path):
+        """
+        Load image from given path (shared by upload and explorer)
+        Extracted from upload_image() for code reuse
+        """
+        self.image_path = file_path
+        self.status_label.setText(f"Loaded: {os.path.basename(file_path)} - Click 'Process Image' to run OCR")
 
-            self.text_output.clear()
-            self.text_output.setPlaceholderText("Click 'Process Image' to extract text...")
+        # Load image same way PaddleOCR does
+        from PIL import Image
+        import tempfile
 
-            # Enable the process and select buttons now that an image is loaded
-            self.process_btn.setEnabled(True)
-            self.select_area_btn.setEnabled(True)
+        pil_image = Image.open(file_path)
+        # Convert to RGB if needed
+        if pil_image.mode != 'RGB':
+            pil_image = pil_image.convert('RGB')
+
+        # Save to temporary file to ensure consistent loading
+        temp_path = tempfile.mktemp(suffix='.png')
+        pil_image.save(temp_path)
+
+        # Load into QPixmap
+        pixmap = QPixmap(temp_path)
+        if not pixmap.isNull():
+            self.image_widget.set_image(pixmap)
+            print(f"Loaded pixmap: {pixmap.width()}x{pixmap.height()}")
+
+        self.text_output.clear()
+        self.text_output.setPlaceholderText("Click 'Process Image' to extract text...")
+
+        # Enable the process and select buttons
+        self.process_btn.setEnabled(True)
+        self.select_area_btn.setEnabled(True)
+
+    def on_splitter_moved(self, pos, index):
+        """Save splitter sizes when user resizes panels"""
+        sizes = self.content_splitter.sizes()
+        self.settings.setValue(self.SETTINGS_SPLITTER_SIZES, sizes)
 
     def process_image(self):
         """Process the currently loaded image with OCR"""
