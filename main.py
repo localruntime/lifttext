@@ -693,13 +693,14 @@ class FileExplorerWidget(QWidget):
         self.file_model = QFileSystemModel()
         self.file_model.setRootPath(QDir.rootPath())
 
-        # Image file filters (only show these extensions)
+        # Image and PDF file filters (only show these extensions)
         self.file_model.setNameFilters([
             '*.png', '*.PNG',
             '*.jpg', '*.JPG', '*.jpeg', '*.JPEG',
             '*.bmp', '*.BMP',
             '*.gif', '*.GIF',
-            '*.tiff', '*.TIFF', '*.tif', '*.TIF'
+            '*.tiff', '*.TIFF', '*.tif', '*.TIF',
+            '*.pdf', '*.PDF'
         ])
         self.file_model.setNameFilterDisables(False)  # Hide non-matching files
 
@@ -1161,6 +1162,14 @@ class OCRApp(QMainWindow):
         self.current_crop_rect = None  # Track active crop for coordinate adjustment
         self.is_processing_selection = False  # Prevent conflicts during selection OCR
 
+        # PDF state tracking
+        self.is_pdf_mode = False           # Whether current file is PDF
+        self.current_pdf_path = None       # Path to loaded PDF
+        self.current_page_number = 0       # Current page (0-indexed)
+        self.total_pdf_pages = 0           # Total pages in PDF
+        self.pdf_page_cache = {}           # Dict[int, str] - page_num -> temp_image_path
+        self.pdf_document = None           # fitz.Document object (keep open for performance)
+
         # Initialize QSettings for persistence
         self.settings = QSettings('PaddleOCR', 'ImageTextExtractor')
 
@@ -1259,6 +1268,31 @@ class OCRApp(QMainWindow):
         self.process_btn.clicked.connect(self.process_image)
         self.process_btn.setEnabled(False)
         button_layout.addWidget(self.process_btn)
+
+        # PDF Navigation Controls (initially hidden)
+        self.pdf_nav_widget = QWidget()
+        pdf_nav_layout = QHBoxLayout(self.pdf_nav_widget)
+        pdf_nav_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Previous page button
+        self.prev_page_btn = QPushButton("← Prev")
+        self.prev_page_btn.clicked.connect(self.navigate_to_prev_page)
+        pdf_nav_layout.addWidget(self.prev_page_btn)
+
+        # Page indicator label
+        self.page_label = QLabel("Page 1 of 1")
+        self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.page_label.setMinimumWidth(100)
+        pdf_nav_layout.addWidget(self.page_label)
+
+        # Next page button
+        self.next_page_btn = QPushButton("Next →")
+        self.next_page_btn.clicked.connect(self.navigate_to_next_page)
+        pdf_nav_layout.addWidget(self.next_page_btn)
+
+        # Add to button layout (hidden by default)
+        button_layout.addWidget(self.pdf_nav_widget)
+        self.pdf_nav_widget.setVisible(False)
 
         # Selection mode toggle button
         self.select_area_btn = QPushButton("Select Area")
@@ -1408,9 +1442,9 @@ class OCRApp(QMainWindow):
         # Start dialog in current explorer directory (better UX)
         file_name, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Image",
+            "Select Image or PDF",
             self.explorer_widget.get_current_directory(),
-            "Image Files (*.png *.jpg *.jpeg *.bmp *.gif *.tiff);;All Files (*)"
+            "Image and PDF Files (*.png *.jpg *.jpeg *.bmp *.gif *.tiff *.pdf);;All Files (*)"
         )
 
         if file_name:
@@ -1423,20 +1457,57 @@ class OCRApp(QMainWindow):
 
     def on_file_selected(self, file_path):
         """Handle file selection from explorer (single-click loading)"""
-        if os.path.exists(file_path) and self.is_valid_image_file(file_path):
+        if os.path.exists(file_path) and self.is_valid_file(file_path):
             self.load_image_from_path(file_path)
             self.explorer_widget.save_current_directory(self.settings)
 
-    def is_valid_image_file(self, file_path):
-        """Check if file is a valid image based on extension"""
+    def is_pdf_file(self, file_path):
+        """Check if file is a PDF based on extension"""
+        return file_path.lower().endswith(('.pdf',))
+
+    def is_image_file(self, file_path):
+        """Check if file is an image based on extension"""
         valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.tif')
         return file_path.lower().endswith(valid_extensions)
 
+    def is_valid_file(self, file_path):
+        """Check if file is a valid image or PDF based on extension"""
+        return self.is_image_file(file_path) or self.is_pdf_file(file_path)
+
+    def reset_pdf_state(self):
+        """Clear all PDF-related state and close document"""
+        if self.pdf_document:
+            self.pdf_document.close()
+        self.is_pdf_mode = False
+        self.current_pdf_path = None
+        self.current_page_number = 0
+        self.total_pdf_pages = 0
+
+        # Clean up cached temp files
+        import os
+        for temp_path in self.pdf_page_cache.values():
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except:
+                pass
+        self.pdf_page_cache.clear()
+        self.pdf_document = None
+        self.hide_pdf_navigation()
+
     def load_image_from_path(self, file_path):
         """
-        Load image from given path (shared by upload and explorer)
-        Extracted from upload_image() for code reuse
+        Load image or PDF from given path (shared by upload and explorer)
+        Routes to appropriate handler based on file type
         """
+        if self.is_pdf_file(file_path):
+            self.load_pdf_file(file_path)
+        else:
+            self.reset_pdf_state()  # Clear PDF state if switching from PDF
+            self.load_image_file(file_path)
+
+    def load_image_file(self, file_path):
+        """Load a regular image file"""
         self.image_path = file_path
         self.status_label.setText(f"Loaded: {os.path.basename(file_path)} - Click 'Process Image' to run OCR")
 
@@ -1465,6 +1536,157 @@ class OCRApp(QMainWindow):
         # Enable the process and select buttons
         self.process_btn.setEnabled(True)
         self.select_area_btn.setEnabled(True)
+
+    def load_pdf_file(self, pdf_path):
+        """
+        Load PDF file and display first page
+
+        Args:
+            pdf_path: Path to PDF file
+        """
+        try:
+            # Import PyMuPDF
+            import fitz
+
+            # Open PDF document
+            doc = fitz.open(pdf_path)
+
+            # Check for password protection
+            if doc.needs_pass:
+                self.status_label.setText("Error: Password-protected PDFs are not supported")
+                doc.close()
+                return
+
+            # Validate PDF has pages
+            if doc.page_count == 0:
+                self.status_label.setText("Error: PDF has no pages")
+                doc.close()
+                return
+
+            # Update PDF state
+            self.pdf_document = doc
+            self.current_pdf_path = pdf_path
+            self.is_pdf_mode = True
+            self.current_page_number = 0
+            self.total_pdf_pages = doc.page_count
+
+            # Load first page
+            self.load_pdf_page_display(0)
+
+            # Update UI
+            self.show_pdf_navigation()
+            self.process_btn.setEnabled(True)
+            self.select_area_btn.setEnabled(True)
+
+            # Update status
+            self.status_label.setText(
+                f"Loaded PDF: {os.path.basename(pdf_path)} ({self.total_pdf_pages} pages) - "
+                f"Click 'Process Image' to run OCR on current page"
+            )
+
+        except Exception as e:
+            self.status_label.setText(f"Error loading PDF: {str(e)}")
+            self.reset_pdf_state()
+
+    def load_pdf_page_display(self, page_number):
+        """
+        Render specific PDF page and display in image widget
+
+        Args:
+            page_number: 0-indexed page number
+        """
+        # Check cache first
+        if page_number in self.pdf_page_cache:
+            temp_path = self.pdf_page_cache[page_number]
+        else:
+            # Render page
+            import fitz
+            from PIL import Image
+            import tempfile
+
+            page = self.pdf_document.load_page(page_number)
+
+            # Get pixmap at 2x resolution for quality
+            zoom_matrix = fitz.Matrix(2, 2)
+            pix = page.get_pixmap(matrix=zoom_matrix)
+
+            # Convert to PIL Image
+            pil_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+            # Save to temp file
+            temp_path = tempfile.mktemp(suffix='.png')
+            pil_image.save(temp_path)
+
+            # Cache page (with size limit)
+            self.cache_pdf_page(page_number, temp_path)
+
+        # Update current page
+        self.current_page_number = page_number
+        self.image_path = temp_path  # OCRWorker expects this
+
+        # Load into widget
+        pixmap = QPixmap(temp_path)
+        if not pixmap.isNull():
+            self.image_widget.set_image(pixmap)
+            print(f"Loaded PDF page {page_number + 1}: {pixmap.width()}x{pixmap.height()}")
+
+        # Clear previous OCR results
+        self.text_output.clear()
+        self.text_output.setPlaceholderText("Click 'Process Image' to extract text from this page...")
+
+        # Update UI
+        self.update_page_label()
+        self.update_page_buttons()
+
+    def cache_pdf_page(self, page_number, temp_path):
+        """Add page to cache with size limit"""
+        MAX_CACHE_SIZE = 10
+
+        if len(self.pdf_page_cache) >= MAX_CACHE_SIZE:
+            # Remove oldest entry (FIFO)
+            import os
+            oldest_page = min(self.pdf_page_cache.keys())
+            old_path = self.pdf_page_cache.pop(oldest_page)
+            # Clean up temp file
+            try:
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            except:
+                pass
+
+        self.pdf_page_cache[page_number] = temp_path
+
+    def navigate_to_prev_page(self):
+        """Load previous PDF page"""
+        if self.is_pdf_mode and self.current_page_number > 0:
+            self.load_pdf_page_display(self.current_page_number - 1)
+
+    def navigate_to_next_page(self):
+        """Load next PDF page"""
+        if self.is_pdf_mode and self.current_page_number < self.total_pdf_pages - 1:
+            self.load_pdf_page_display(self.current_page_number + 1)
+
+    def show_pdf_navigation(self):
+        """Display PDF navigation controls"""
+        self.pdf_nav_widget.setVisible(True)
+        self.update_page_label()
+        self.update_page_buttons()
+
+    def hide_pdf_navigation(self):
+        """Hide PDF navigation controls"""
+        self.pdf_nav_widget.setVisible(False)
+
+    def update_page_label(self):
+        """Update page indicator text"""
+        if self.is_pdf_mode:
+            current = self.current_page_number + 1  # Display 1-indexed
+            total = self.total_pdf_pages
+            self.page_label.setText(f"Page {current} of {total}")
+
+    def update_page_buttons(self):
+        """Enable/disable prev/next based on current page"""
+        self.prev_page_btn.setEnabled(self.current_page_number > 0)
+        self.next_page_btn.setEnabled(self.current_page_number < self.total_pdf_pages - 1)
 
     def on_splitter_moved(self, pos, index):
         """Save splitter sizes when user resizes panels"""

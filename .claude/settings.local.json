@@ -14,7 +14,9 @@
       "WebFetch(domain:www.paddleocr.ai)",
       "Bash(defaults delete:*)",
       "WebFetch(domain:github.com)",
-      "Bash(timeout 3 python:*)"
+      "Bash(timeout 3 python:*)",
+      "Bash(python3:*)",
+      "Bash(timeout 5 python:*)"
     ],
     "deny": [],
     "ask": []
