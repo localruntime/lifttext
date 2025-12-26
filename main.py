@@ -1,7 +1,8 @@
 import sys
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QPushButton, QLabel, QTextEdit,
-                               QFileDialog, QScrollArea, QListWidget, QListWidgetItem, QProgressBar, QComboBox)
+                               QFileDialog, QScrollArea, QListWidget, QListWidgetItem, QProgressBar, QComboBox,
+                               QDialog, QFormLayout, QDialogButtonBox, QGroupBox)
 from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint, QSettings
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont
 from paddleocr import PaddleOCR
@@ -668,11 +669,12 @@ class OCRWorker(QThread):
     progress_value = Signal(int)  # Emits progress percentage (0-100)
     preprocessed_image = Signal(str)  # ADD THIS: Signal to send preprocessed image path
 
-    def __init__(self, image_path, det_model='PP-OCRv4_mobile_det', rec_model='en_PP-OCRv4_mobile_rec', crop_rect=None):
+    def __init__(self, image_path, det_model='PP-OCRv4_mobile_det', rec_model='en_PP-OCRv4_mobile_rec', language='en', crop_rect=None):
         super().__init__()
         self.image_path = image_path
         self.det_model = det_model
         self.rec_model = rec_model
+        self.language = language
         self.crop_rect = crop_rect  # (x, y, width, height) in original image coords
         self.ocr = None
 
@@ -690,7 +692,7 @@ class OCRWorker(QThread):
                 use_doc_orientation_classify=False,  # Disable document orientation classification
                 use_doc_unwarping=False,             # Disable document unwarping
                 use_textline_orientation=False,      # Disable text orientation detection
-                lang='en',
+                lang=self.language,
 
                 # Detection optimizations (v3 uses text_det_* prefix)
                 text_det_limit_side_len=960,     # Lower for faster processing (480-960 range)
@@ -870,6 +872,128 @@ class OCRWorker(QThread):
             self.error.emit(f"Error during OCR: {str(e)}\n\nDetails:\n{error_details}")
 
 
+class SettingsDialog(QDialog):
+    """Settings dialog for OCR configuration"""
+
+    def __init__(self, parent=None, current_settings=None):
+        super().__init__(parent)
+        self.setWindowTitle("Settings")
+        self.setModal(True)
+        self.setMinimumWidth(450)
+
+        self.current_settings = current_settings or {}
+
+        # Available options
+        self.detection_models = [
+            'PP-OCRv4_mobile_det',
+            'PP-OCRv4_server_det',
+            'PP-OCRv5_mobile_det',
+            'PP-OCRv5_server_det',
+        ]
+
+        self.recognition_models = [
+            'en_PP-OCRv4_mobile_rec',
+            'en_PP-OCRv5_mobile_rec',
+            'PP-OCRv4_mobile_rec',
+            'PP-OCRv4_server_rec',
+            'PP-OCRv5_mobile_rec',
+            'PP-OCRv5_server_rec',
+        ]
+
+        self.supported_languages = [
+            ('Chinese & English', 'ch'),
+            ('English', 'en'),
+            ('Chinese Traditional', 'ch_tra'),
+            ('Japanese', 'japan'),
+            ('Korean', 'korean'),
+            ('French', 'fr'),
+            ('German', 'german'),
+            ('Spanish', 'es'),
+            ('Portuguese', 'pt'),
+            ('Russian', 'ru'),
+            ('Italian', 'it'),
+            ('Arabic', 'ar'),
+            ('Hindi', 'hi'),
+            ('Vietnamese', 'vi'),
+            ('Thai', 'th'),
+            ('Indonesian', 'id'),
+            ('Turkish', 'tr'),
+            ('Polish', 'pl'),
+            ('Dutch', 'nl'),
+            ('Swedish', 'sv'),
+        ]
+
+        self.init_ui()
+
+    def init_ui(self):
+        """Initialize the settings dialog UI"""
+        layout = QVBoxLayout(self)
+
+        # OCR Models Group
+        models_group = QGroupBox("OCR Models")
+        models_layout = QFormLayout()
+
+        # Detection model dropdown
+        self.det_model_combo = QComboBox()
+        self.det_model_combo.addItems(self.detection_models)
+        current_det = self.current_settings.get('detection_model', 'PP-OCRv4_mobile_det')
+        if current_det in self.detection_models:
+            self.det_model_combo.setCurrentText(current_det)
+        models_layout.addRow("Detection Model:", self.det_model_combo)
+
+        # Recognition model dropdown
+        self.rec_model_combo = QComboBox()
+        self.rec_model_combo.addItems(self.recognition_models)
+        current_rec = self.current_settings.get('recognition_model', 'en_PP-OCRv4_mobile_rec')
+        if current_rec in self.recognition_models:
+            self.rec_model_combo.setCurrentText(current_rec)
+        models_layout.addRow("Recognition Model:", self.rec_model_combo)
+
+        models_group.setLayout(models_layout)
+        layout.addWidget(models_group)
+
+        # Language Group
+        language_group = QGroupBox("Language")
+        language_layout = QFormLayout()
+
+        # Language dropdown
+        self.language_combo = QComboBox()
+        for lang_name, lang_code in self.supported_languages:
+            self.language_combo.addItem(lang_name, lang_code)
+
+        # Set current language
+        current_lang = self.current_settings.get('language', 'en')
+        for i, (_, code) in enumerate(self.supported_languages):
+            if code == current_lang:
+                self.language_combo.setCurrentIndex(i)
+                break
+
+        language_layout.addRow("Language:", self.language_combo)
+        language_group.setLayout(language_layout)
+        layout.addWidget(language_group)
+
+        # Info label
+        info_label = QLabel("Note: Changes will take effect when you next process an image.")
+        info_label.setStyleSheet("color: #666; font-style: italic; padding: 10px;")
+        layout.addWidget(info_label)
+
+        # Dialog buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def get_settings(self):
+        """Return the selected settings as a dictionary"""
+        return {
+            'detection_model': self.det_model_combo.currentText(),
+            'recognition_model': self.rec_model_combo.currentText(),
+            'language': self.language_combo.currentData(),
+        }
+
+
 class OCRApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -887,14 +1011,28 @@ class OCRApp(QMainWindow):
         # Settings keys
         self.SETTINGS_DET_MODEL = 'ocr/detection_model'
         self.SETTINGS_REC_MODEL = 'ocr/recognition_model'
+        self.SETTINGS_LANGUAGE = 'ocr/language'
         self.DEFAULT_DET_MODEL = 'PP-OCRv4_mobile_det'
         self.DEFAULT_REC_MODEL = 'en_PP-OCRv4_mobile_rec'
+        self.DEFAULT_LANGUAGE = 'en'
 
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle("PaddleOCR Image Text Extractor")
         self.setGeometry(100, 100, 1000, 700)
+
+        # Create menu bar
+        menubar = self.menuBar()
+
+        # File menu (placeholder for future)
+        file_menu = menubar.addMenu("&File")
+
+        # Edit menu
+        edit_menu = menubar.addMenu("&Edit")
+        settings_action = edit_menu.addAction("Settings...")
+        settings_action.setShortcut("Ctrl+,")
+        settings_action.triggered.connect(self.show_settings_dialog)
 
         # Available models for dropdown menus
         self.detection_models = [
@@ -926,6 +1064,13 @@ class OCRApp(QMainWindow):
         # Validate saved models exist in current model lists
         self.selected_det_model = saved_det_model if saved_det_model in self.detection_models else self.DEFAULT_DET_MODEL
         self.selected_rec_model = saved_rec_model if saved_rec_model in self.recognition_models else self.DEFAULT_REC_MODEL
+
+        # Load language setting
+        saved_language = self.settings.value(
+            self.SETTINGS_LANGUAGE,
+            self.DEFAULT_LANGUAGE
+        )
+        self.selected_language = saved_language
 
         # Central widget and main layout
         central_widget = QWidget()
@@ -970,31 +1115,11 @@ class OCRApp(QMainWindow):
         self.clear_selection_btn.setEnabled(False)
         button_layout.addWidget(self.clear_selection_btn)
 
-        # Detection model selection
-        det_label = QLabel("Detection:")
-        det_label.setStyleSheet("font-size: 12px; padding-left: 10px;")
-        button_layout.addWidget(det_label)
-
-        self.det_model_combo = QComboBox()
-        self.det_model_combo.addItems(self.detection_models)
-        self.det_model_combo.setCurrentText(self.selected_det_model)
-        self.det_model_combo.currentTextChanged.connect(self.on_detection_model_changed)
-        self.det_model_combo.setMaximumWidth(180)
-        self.det_model_combo.setStyleSheet("font-size: 12px; padding: 5px;")
-        button_layout.addWidget(self.det_model_combo)
-
-        # Recognition model selection
-        rec_label = QLabel("Recognition:")
-        rec_label.setStyleSheet("font-size: 12px; padding-left: 10px;")
-        button_layout.addWidget(rec_label)
-
-        self.rec_model_combo = QComboBox()
-        self.rec_model_combo.addItems(self.recognition_models)
-        self.rec_model_combo.setCurrentText(self.selected_rec_model)
-        self.rec_model_combo.currentTextChanged.connect(self.on_recognition_model_changed)
-        self.rec_model_combo.setMaximumWidth(180)
-        self.rec_model_combo.setStyleSheet("font-size: 12px; padding: 5px;")
-        button_layout.addWidget(self.rec_model_combo)
+        # Settings button
+        settings_btn = QPushButton("Settings")
+        settings_btn.clicked.connect(self.show_settings_dialog)
+        settings_btn.setStyleSheet("font-size: 14px; padding: 10px;")
+        button_layout.addWidget(settings_btn)
 
         # Add spacer
         button_layout.addStretch()
@@ -1135,7 +1260,8 @@ class OCRApp(QMainWindow):
         self.ocr_worker = OCRWorker(
             image_path,
             det_model=self.selected_det_model,
-            rec_model=self.selected_rec_model
+            rec_model=self.selected_rec_model,
+            language=self.selected_language
         )
         self.ocr_worker.finished.connect(self.on_ocr_complete)
         self.ocr_worker.words_detected.connect(self.on_words_detected)
@@ -1225,17 +1351,38 @@ class OCRApp(QMainWindow):
         # Reset processing flag
         self.is_processing_selection = False
 
-    def on_detection_model_changed(self, model_name):
-        """Handle detection model selection change"""
-        self.selected_det_model = model_name
-        self.settings.setValue(self.SETTINGS_DET_MODEL, model_name)
-        self.status_label.setText(f"Detection model: {model_name}")
+    def show_settings_dialog(self):
+        """Show the settings dialog"""
+        # Prepare current settings
+        current_settings = {
+            'detection_model': self.selected_det_model,
+            'recognition_model': self.selected_rec_model,
+            'language': self.selected_language,
+        }
 
-    def on_recognition_model_changed(self, model_name):
-        """Handle recognition model selection change"""
-        self.selected_rec_model = model_name
-        self.settings.setValue(self.SETTINGS_REC_MODEL, model_name)
-        self.status_label.setText(f"Recognition model: {model_name}")
+        # Create and show dialog
+        dialog = SettingsDialog(self, current_settings)
+
+        if dialog.exec() == QDialog.Accepted:
+            # Get new settings
+            new_settings = dialog.get_settings()
+
+            # Save to instance variables
+            self.selected_det_model = new_settings['detection_model']
+            self.selected_rec_model = new_settings['recognition_model']
+            self.selected_language = new_settings['language']
+
+            # Save to QSettings
+            self.settings.setValue(self.SETTINGS_DET_MODEL, new_settings['detection_model'])
+            self.settings.setValue(self.SETTINGS_REC_MODEL, new_settings['recognition_model'])
+            self.settings.setValue(self.SETTINGS_LANGUAGE, new_settings['language'])
+
+            # Update status
+            self.status_label.setText(
+                f"Settings saved: {new_settings['detection_model']}, "
+                f"{new_settings['recognition_model']}, "
+                f"lang={new_settings['language']}. Process image to apply changes."
+            )
 
     # Selection mode methods
     def toggle_selection_mode(self, enabled):
@@ -1290,6 +1437,7 @@ class OCRApp(QMainWindow):
             image_path,
             det_model=self.selected_det_model,
             rec_model=self.selected_rec_model,
+            language=self.selected_language,
             crop_rect=crop_rect  # Pass crop parameters
         )
 
