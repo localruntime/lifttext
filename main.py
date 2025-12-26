@@ -12,7 +12,7 @@ import os
 
 class ImageWithBoxes(QLabel):
     """Custom widget that displays an image with clickable word boxes"""
-    word_clicked = Signal(dict)  # Emits word data when a box is clicked
+    word_clicked = Signal(object)  # Emits word data when a box is clicked (dict or None)
     zoom_changed = Signal(float)  # Emits current zoom level
     selection_changed = Signal(bool)  # Emits when selection becomes active/inactive
 
@@ -275,6 +275,7 @@ class ImageWithBoxes(QLabel):
         # PRIORITY 3: Word box clicking (only if NOT in selection mode)
         if event.button() == Qt.LeftButton:
             click_pos = event.pos()
+            word_found = False
 
             # Check which word box was clicked (in reverse order for top-most)
             for idx in range(len(self.word_data) - 1, -1, -1):
@@ -294,7 +295,14 @@ class ImageWithBoxes(QLabel):
                         self.selected_word_index = idx
                         self.word_clicked.emit(word_info)
                         self.update()
+                        word_found = True
                         break
+
+            # If clicked on empty space, clear selection
+            if not word_found and self.selected_word_index is not None:
+                self.selected_word_index = None
+                self.word_clicked.emit(None)  # Signal deselection
+                self.update()
 
     def mouseReleaseEvent(self, event):
         """Handle mouse release to end panning and finalize selection"""
@@ -1145,6 +1153,7 @@ class OCRApp(QMainWindow):
         self.image_path = None
         self.ocr_worker = None
         self.word_data = []  # Store detected words data
+        self.all_words = []  # Cache all detected words for deselection
 
         # Selection tracking
         self.current_crop_rect = None  # Track active crop for coordinate adjustment
@@ -1511,6 +1520,7 @@ class OCRApp(QMainWindow):
     def on_words_detected(self, words):
         """Set word data on the image widget"""
         self.word_data = words
+        self.all_words = words  # Cache all words for deselection
 
         # Debug: Print word data
         print(f"Received {len(words)} words")
@@ -1527,9 +1537,16 @@ class OCRApp(QMainWindow):
             self.text_output.setText(all_text)
 
     def on_word_box_clicked(self, word_info):
-        """Display word when a word box is clicked"""
-        if word_info:
-            # Show only the word text
+        """Display word when a word box is clicked, or all words when deselected"""
+        if word_info is None:
+            # Clicked on empty space - show all words
+            if self.all_words:
+                all_text = '\n'.join(word.get('text', '') for word in self.all_words)
+                self.text_output.setText(all_text)
+            else:
+                self.text_output.setText("No words detected in image")
+        else:
+            # Clicked on a word box - show only that word
             self.text_output.setText(word_info.get('text', ''))
 
     def on_zoom_changed(self, zoom_level):
