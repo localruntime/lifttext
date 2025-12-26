@@ -923,6 +923,29 @@ class SettingsDialog(QDialog):
             ('Swedish', 'sv'),
         ]
 
+        self.available_themes = [
+            # Light themes
+            ('Light Blue', 'light_blue.xml'),
+            ('Light Cyan', 'light_cyan.xml'),
+            ('Light Green', 'light_lightgreen.xml'),
+            ('Light Pink', 'light_pink.xml'),
+            ('Light Purple', 'light_purple.xml'),
+            ('Light Red', 'light_red.xml'),
+            ('Light Teal', 'light_teal.xml'),
+            ('Light Yellow', 'light_yellow.xml'),
+            ('Light Amber', 'light_amber.xml'),
+
+            # Dark themes
+            ('Dark Blue', 'dark_blue.xml'),
+            ('Dark Cyan', 'dark_cyan.xml'),
+            ('Dark Green', 'dark_lightgreen.xml'),
+            ('Dark Pink', 'dark_pink.xml'),
+            ('Dark Purple', 'dark_purple.xml'),
+            ('Dark Red', 'dark_red.xml'),
+            ('Dark Teal', 'dark_teal.xml'),
+            ('Dark Yellow', 'dark_yellow.xml'),
+        ]
+
         self.init_ui()
 
     def init_ui(self):
@@ -972,9 +995,28 @@ class SettingsDialog(QDialog):
         language_group.setLayout(language_layout)
         layout.addWidget(language_group)
 
+        # Theme Group
+        theme_group = QGroupBox("Theme")
+        theme_layout = QFormLayout()
+
+        # Theme dropdown
+        self.theme_combo = QComboBox()
+        for theme_name, theme_file in self.available_themes:
+            self.theme_combo.addItem(theme_name, theme_file)
+
+        # Set current theme
+        current_theme = self.current_settings.get('theme', 'light_blue.xml')
+        for i, (_, theme_file) in enumerate(self.available_themes):
+            if theme_file == current_theme:
+                self.theme_combo.setCurrentIndex(i)
+                break
+
+        theme_layout.addRow("Application Theme:", self.theme_combo)
+        theme_group.setLayout(theme_layout)
+        layout.addWidget(theme_group)
+
         # Info label
         info_label = QLabel("Note: Changes will take effect when you next process an image.")
-        info_label.setStyleSheet("color: #666; font-style: italic; padding: 10px;")
         layout.addWidget(info_label)
 
         # Dialog buttons
@@ -991,6 +1033,7 @@ class SettingsDialog(QDialog):
             'detection_model': self.det_model_combo.currentText(),
             'recognition_model': self.rec_model_combo.currentText(),
             'language': self.language_combo.currentData(),
+            'theme': self.theme_combo.currentData(),
         }
 
 
@@ -1012,9 +1055,11 @@ class OCRApp(QMainWindow):
         self.SETTINGS_DET_MODEL = 'ocr/detection_model'
         self.SETTINGS_REC_MODEL = 'ocr/recognition_model'
         self.SETTINGS_LANGUAGE = 'ocr/language'
+        self.SETTINGS_THEME = 'ui/theme'
         self.DEFAULT_DET_MODEL = 'PP-OCRv4_mobile_det'
         self.DEFAULT_REC_MODEL = 'en_PP-OCRv4_mobile_rec'
         self.DEFAULT_LANGUAGE = 'en'
+        self.DEFAULT_THEME = 'light_blue.xml'
 
         self.init_ui()
 
@@ -1072,6 +1117,13 @@ class OCRApp(QMainWindow):
         )
         self.selected_language = saved_language
 
+        # Load theme setting
+        saved_theme = self.settings.value(
+            self.SETTINGS_THEME,
+            self.DEFAULT_THEME
+        )
+        self.selected_theme = saved_theme
+
         # Central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -1083,13 +1135,11 @@ class OCRApp(QMainWindow):
         # Upload button
         upload_btn = QPushButton("Upload Image")
         upload_btn.clicked.connect(self.upload_image)
-        upload_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         button_layout.addWidget(upload_btn)
 
         # Process image button (disabled until image is loaded)
         self.process_btn = QPushButton("Process Image")
         self.process_btn.clicked.connect(self.process_image)
-        self.process_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         self.process_btn.setEnabled(False)
         button_layout.addWidget(self.process_btn)
 
@@ -1097,28 +1147,24 @@ class OCRApp(QMainWindow):
         self.select_area_btn = QPushButton("Select Area")
         self.select_area_btn.setCheckable(True)
         self.select_area_btn.clicked.connect(self.toggle_selection_mode)
-        self.select_area_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         self.select_area_btn.setEnabled(False)  # Disabled until image is loaded
         button_layout.addWidget(self.select_area_btn)
 
         # Process selection button
         self.process_selection_btn = QPushButton("Process Selection")
         self.process_selection_btn.clicked.connect(self.process_selection)
-        self.process_selection_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         self.process_selection_btn.setEnabled(False)  # Enabled when selection exists
         button_layout.addWidget(self.process_selection_btn)
 
         # Clear selection button
         self.clear_selection_btn = QPushButton("Clear Selection")
         self.clear_selection_btn.clicked.connect(self.clear_selection)
-        self.clear_selection_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         self.clear_selection_btn.setEnabled(False)
         button_layout.addWidget(self.clear_selection_btn)
 
         # Settings button
         settings_btn = QPushButton("Settings")
         settings_btn.clicked.connect(self.show_settings_dialog)
-        settings_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         button_layout.addWidget(settings_btn)
 
         # Add spacer
@@ -1127,22 +1173,18 @@ class OCRApp(QMainWindow):
         # Zoom controls
         zoom_in_btn = QPushButton("Zoom In (+)")
         zoom_in_btn.clicked.connect(lambda: self.image_widget.zoom_in())
-        zoom_in_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         button_layout.addWidget(zoom_in_btn)
 
         zoom_out_btn = QPushButton("Zoom Out (-)")
         zoom_out_btn.clicked.connect(lambda: self.image_widget.zoom_out())
-        zoom_out_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         button_layout.addWidget(zoom_out_btn)
 
         zoom_reset_btn = QPushButton("Reset Zoom")
         zoom_reset_btn.clicked.connect(lambda: self.image_widget.zoom_reset())
-        zoom_reset_btn.setStyleSheet("font-size: 14px; padding: 10px;")
         button_layout.addWidget(zoom_reset_btn)
 
         # Zoom level label
         self.zoom_label = QLabel("100%")
-        self.zoom_label.setStyleSheet("font-size: 14px; padding: 10px; font-weight: bold;")
         button_layout.addWidget(self.zoom_label)
 
         main_layout.addLayout(button_layout)
@@ -1153,7 +1195,6 @@ class OCRApp(QMainWindow):
         # Image with word boxes display area
         image_container = QVBoxLayout()
         image_label = QLabel("Image with Detected Words")
-        image_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         image_container.addWidget(image_label)
 
         # Scroll area for image
@@ -1164,7 +1205,6 @@ class OCRApp(QMainWindow):
         # Custom image widget with word boxes
         self.image_widget = ImageWithBoxes()
         self.image_widget.setAlignment(Qt.AlignCenter)
-        self.image_widget.setStyleSheet("background-color: #f0f0f0; border: 2px solid #ccc;")
         self.image_widget.setMinimumSize(400, 400)
         self.image_widget.word_clicked.connect(self.on_word_box_clicked)
         self.image_widget.zoom_changed.connect(self.on_zoom_changed)
@@ -1178,13 +1218,11 @@ class OCRApp(QMainWindow):
         # Text output area
         text_container = QVBoxLayout()
         text_label = QLabel("Extracted Text")
-        text_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         text_container.addWidget(text_label)
 
         self.text_output = QTextEdit()
         self.text_output.setReadOnly(True)
         self.text_output.setPlaceholderText("Extracted text will appear here...")
-        self.text_output.setStyleSheet("font-size: 12px; padding: 5px;")
         text_container.addWidget(self.text_output)
 
         content_layout.addLayout(text_container)
@@ -1199,7 +1237,6 @@ class OCRApp(QMainWindow):
 
         # Status label
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("padding: 5px; background-color: #e8e8e8;")
         main_layout.addWidget(self.status_label)
 
     def upload_image(self):
@@ -1358,6 +1395,7 @@ class OCRApp(QMainWindow):
             'detection_model': self.selected_det_model,
             'recognition_model': self.selected_rec_model,
             'language': self.selected_language,
+            'theme': self.selected_theme,
         }
 
         # Create and show dialog
@@ -1371,17 +1409,29 @@ class OCRApp(QMainWindow):
             self.selected_det_model = new_settings['detection_model']
             self.selected_rec_model = new_settings['recognition_model']
             self.selected_language = new_settings['language']
+            self.selected_theme = new_settings['theme']
 
             # Save to QSettings
             self.settings.setValue(self.SETTINGS_DET_MODEL, new_settings['detection_model'])
             self.settings.setValue(self.SETTINGS_REC_MODEL, new_settings['recognition_model'])
             self.settings.setValue(self.SETTINGS_LANGUAGE, new_settings['language'])
+            self.settings.setValue(self.SETTINGS_THEME, new_settings['theme'])
+
+            # Apply theme immediately (no restart required)
+            try:
+                from qt_material import apply_stylesheet
+                apply_stylesheet(QApplication.instance(), theme=new_settings['theme'])
+            except Exception as e:
+                print(f"Warning: Could not apply theme: {e}")
 
             # Update status
+            theme_name = new_settings['theme'].replace('.xml', '').replace('_', ' ').title()
             self.status_label.setText(
                 f"Settings saved: {new_settings['detection_model']}, "
                 f"{new_settings['recognition_model']}, "
-                f"lang={new_settings['language']}. Process image to apply changes."
+                f"lang={new_settings['language']}, "
+                f"theme={theme_name}. "
+                f"Process image to apply OCR changes."
             )
 
     # Selection mode methods
@@ -1477,6 +1527,18 @@ class OCRApp(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+
+    # Apply Material Design theme
+    try:
+        from qt_material import apply_stylesheet
+        settings = QSettings('PaddleOCR', 'ImageTextExtractor')
+        theme = settings.value('ui/theme', 'light_blue.xml')
+        apply_stylesheet(app, theme=theme)
+    except ImportError:
+        print("Warning: qt-material not installed. Using default Qt styling.")
+    except Exception as e:
+        print(f"Warning: Could not apply theme: {e}")
+
     window = OCRApp()
     window.show()
     sys.exit(app.exec())
