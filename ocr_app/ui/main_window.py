@@ -84,7 +84,7 @@ class OCRApp(QMainWindow):
 
         # Create main panels
         self.content_splitter = self._create_main_panels()
-        main_layout.addWidget(self.content_splitter)
+        main_layout.addWidget(self.content_splitter, 1)  # Stretch factor: expand to fill available space
 
         # Progress bar
         self.progress_bar = QProgressBar()
@@ -119,9 +119,10 @@ class OCRApp(QMainWindow):
         upload_btn.clicked.connect(self.upload_image)
         button_layout.addWidget(upload_btn)
 
-        # Process image button
-        self.process_btn = QPushButton("Process Image")
-        self.process_btn.clicked.connect(self.process_image)
+        # Process button (smart - handles both full image and selection)
+        self.process_btn = QPushButton("Process")
+        self.process_btn.setToolTip("Process the full image, or the selected area if a selection is active")
+        self.process_btn.clicked.connect(self.process)
         self.process_btn.setEnabled(False)
         button_layout.addWidget(self.process_btn)
 
@@ -156,12 +157,6 @@ class OCRApp(QMainWindow):
         self.select_area_btn.clicked.connect(self.toggle_selection_mode)
         self.select_area_btn.setEnabled(False)
         button_layout.addWidget(self.select_area_btn)
-
-        # Process selection button
-        self.process_selection_btn = QPushButton("Process Selection")
-        self.process_selection_btn.clicked.connect(self.process_selection)
-        self.process_selection_btn.setEnabled(False)
-        button_layout.addWidget(self.process_selection_btn)
 
         # Clear selection button
         self.clear_selection_btn = QPushButton("Clear Selection")
@@ -321,7 +316,7 @@ class OCRApp(QMainWindow):
     def _load_image(self, file_path):
         """Load a regular image file"""
         self.image_path = file_path
-        self.status_label.setText(f"Loaded: {os.path.basename(file_path)} - Click 'Process Image' to run OCR")
+        self.status_label.setText(f"Loaded: {os.path.basename(file_path)} - Click 'Process' to run OCR")
 
         # Load image same way PaddleOCR does
         pil_image = Image.open(file_path)
@@ -338,7 +333,7 @@ class OCRApp(QMainWindow):
             self.image_widget.set_image(pixmap)
 
         self.text_output.clear()
-        self.text_output.setPlaceholderText("Click 'Process Image' to extract text...")
+        self.text_output.setPlaceholderText("Click 'Process' to extract text...")
 
         self.process_btn.setEnabled(True)
         self.select_area_btn.setEnabled(True)
@@ -354,7 +349,7 @@ class OCRApp(QMainWindow):
                 self.image_widget.set_image(pixmap)
 
             self.text_output.clear()
-            self.text_output.setPlaceholderText("Click 'Process Image' to extract text from this page...")
+            self.text_output.setPlaceholderText("Click 'Process' to extract text from this page...")
 
             self.process_btn.setEnabled(True)
             self.select_area_btn.setEnabled(True)
@@ -380,7 +375,7 @@ class OCRApp(QMainWindow):
             if not pixmap.isNull():
                 self.image_widget.set_image(pixmap)
             self.text_output.clear()
-            self.text_output.setPlaceholderText("Click 'Process Image' to extract text from this page...")
+            self.text_output.setPlaceholderText("Click 'Process' to extract text from this page...")
 
     def navigate_to_next_page(self):
         """Navigate to next PDF page"""
@@ -391,7 +386,7 @@ class OCRApp(QMainWindow):
             if not pixmap.isNull():
                 self.image_widget.set_image(pixmap)
             self.text_output.clear()
-            self.text_output.setPlaceholderText("Click 'Process Image' to extract text from this page...")
+            self.text_output.setPlaceholderText("Click 'Process' to extract text from this page...")
 
     def show_pdf_navigation(self):
         """Show PDF navigation controls"""
@@ -412,9 +407,26 @@ class OCRApp(QMainWindow):
         self.next_page_btn.setEnabled(self.pdf_handler.can_navigate_next())
 
     # OCR processing methods
-    def process_image(self):
-        """Process the currently loaded image with OCR"""
-        if self.image_path:
+    def process(self):
+        """Smart process method - handles both full image and selection"""
+        if not self.image_path:
+            return
+
+        # Check if we have a valid selection
+        has_selection = (self.image_widget.selection_rect_original is not None
+                         and self.image_widget.validate_selection())
+
+        if has_selection:
+            # Process selection path
+            crop_rect = self.image_widget.selection_rect_original
+            self.image_widget.set_word_data([])
+            self.current_crop_rect = crop_rect
+            self.is_processing_selection = True
+            self.process_btn.setEnabled(False)
+            self.select_area_btn.setEnabled(False)
+            self.extract_text(self.image_path, crop_rect)
+        else:
+            # Process full image path
             self.process_btn.setEnabled(False)
             self.extract_text(self.image_path)
 
@@ -495,29 +507,9 @@ class OCRApp(QMainWindow):
         self.image_widget.set_selection_mode(enabled)
 
         if enabled:
-            self.process_btn.setEnabled(False)
             self.status_label.setText("Selection mode active - draw a rectangle on the image")
         else:
-            self.process_btn.setEnabled(True)
             self.status_label.setText("Selection mode disabled")
-
-    def process_selection(self):
-        """Process the selected area with OCR"""
-        if not self.image_widget.selection_rect_original:
-            return
-
-        if not self.image_widget.validate_selection():
-            self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px")
-            return
-
-        crop_rect = self.image_widget.selection_rect_original
-        if crop_rect and self.image_path:
-            self.image_widget.set_word_data([])
-            self.current_crop_rect = crop_rect
-            self.is_processing_selection = True
-            self.process_selection_btn.setEnabled(False)
-            self.select_area_btn.setEnabled(False)
-            self.extract_text(self.image_path, crop_rect)
 
     def clear_selection(self):
         """Clear the selection and return to normal mode"""
@@ -532,14 +524,13 @@ class OCRApp(QMainWindow):
     def on_selection_changed(self, has_selection):
         """Handle selection state changes"""
         is_valid = has_selection and self.image_widget.validate_selection()
-        self.process_selection_btn.setEnabled(is_valid)
         self.clear_selection_btn.setEnabled(has_selection)
 
         if has_selection and not is_valid:
-            self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px")
+            self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px. 'Process' will process full image.")
         elif has_selection:
             x, y, w, h = self.image_widget.selection_rect_original
-            self.status_label.setText(f"Selection: {w}x{h}px at ({x}, {y}) - Click 'Process Selection' to run OCR")
+            self.status_label.setText(f"Selection: {w}x{h}px at ({x}, {y}) - Click 'Process' to run OCR on selection")
 
     # Event handlers
     def on_word_box_clicked(self, word_info):
