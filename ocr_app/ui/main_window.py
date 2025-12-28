@@ -167,17 +167,19 @@ class OCRApp(QMainWindow):
         image_label = QLabel("Image with Detected Words")
         image_container.addWidget(image_label)
 
-        # Add zoom controls toolbar (inline, above scroll area)
-        zoom_toolbar = QHBoxLayout()
-        zoom_toolbar.setContentsMargins(0, 5, 0, 5)
-        zoom_toolbar.setSpacing(5)
+        # Add action toolbar (Scan and Select Area buttons)
+        action_toolbar = QHBoxLayout()
+        action_toolbar.setContentsMargins(0, 5, 0, 5)
+        action_toolbar.setSpacing(5)
 
         # Scan button (smart - handles both full image and selection)
         self.process_btn = QPushButton("Scan")
         self.process_btn.setToolTip("Scan the full image, or the selected area if a selection is active")
         self.process_btn.clicked.connect(self.process)
         self.process_btn.setEnabled(False)
-        zoom_toolbar.addWidget(self.process_btn)
+        action_toolbar.addWidget(self.process_btn)
+
+        action_toolbar.addStretch()  # Push Select Area button to the right
 
         # Selection mode toggle button
         self.select_area_btn = QPushButton()
@@ -188,9 +190,30 @@ class OCRApp(QMainWindow):
         self.select_area_btn.setCheckable(True)
         self.select_area_btn.clicked.connect(self.toggle_selection_mode)
         self.select_area_btn.setEnabled(False)
-        zoom_toolbar.addWidget(self.select_area_btn)
+        action_toolbar.addWidget(self.select_area_btn)
 
-        zoom_toolbar.addStretch()  # Push zoom controls to the right
+        image_container.addLayout(action_toolbar)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMinimumWidth(450)
+
+        self.image_widget = ImageWithBoxes()
+        self.image_widget.setAlignment(Qt.AlignCenter)
+        self.image_widget.setMinimumSize(400, 400)
+        self.image_widget.word_clicked.connect(self.on_word_box_clicked)
+        self.image_widget.selection_changed.connect(self.on_selection_changed)
+
+        scroll_area.setWidget(self.image_widget)
+        image_container.addWidget(scroll_area)
+
+        # Zoom controls at the bottom (initially hidden)
+        self.zoom_controls_widget = QWidget()
+        zoom_toolbar = QHBoxLayout(self.zoom_controls_widget)
+        zoom_toolbar.setContentsMargins(0, 5, 0, 0)
+        zoom_toolbar.setSpacing(5)
+
+        zoom_toolbar.addStretch()  # Center the zoom controls
 
         zoom_in_btn = QPushButton()
         zoom_in_btn.setIcon(MaterialIcon('zoom_in'))
@@ -217,17 +240,7 @@ class OCRApp(QMainWindow):
         self.zoom_label.setMinimumWidth(50)
         zoom_toolbar.addWidget(self.zoom_label)
 
-        image_container.addLayout(zoom_toolbar)
-
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMinimumWidth(450)
-
-        self.image_widget = ImageWithBoxes()
-        self.image_widget.setAlignment(Qt.AlignCenter)
-        self.image_widget.setMinimumSize(400, 400)
-        self.image_widget.word_clicked.connect(self.on_word_box_clicked)
-        self.image_widget.selection_changed.connect(self.on_selection_changed)
+        zoom_toolbar.addStretch()  # Center the zoom controls
 
         # Connect zoom button signals
         zoom_in_btn.clicked.connect(self.image_widget.zoom_in)
@@ -235,8 +248,8 @@ class OCRApp(QMainWindow):
         zoom_reset_btn.clicked.connect(self.image_widget.zoom_reset)
         self.image_widget.zoom_changed.connect(lambda zoom: self.zoom_label.setText(f"{int(zoom * 100)}%"))
 
-        scroll_area.setWidget(self.image_widget)
-        image_container.addWidget(scroll_area)
+        image_container.addWidget(self.zoom_controls_widget)
+        self.zoom_controls_widget.setVisible(False)  # Hidden until image is loaded
 
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
@@ -331,6 +344,7 @@ class OCRApp(QMainWindow):
 
         self.process_btn.setEnabled(True)
         self.select_area_btn.setEnabled(True)
+        self.zoom_controls_widget.setVisible(True)  # Show zoom controls when image is loaded
 
     def _load_pdf(self, pdf_path):
         """Load a PDF file"""
@@ -347,6 +361,7 @@ class OCRApp(QMainWindow):
 
             self.process_btn.setEnabled(True)
             self.select_area_btn.setEnabled(True)
+            self.zoom_controls_widget.setVisible(True)  # Show zoom controls when PDF is loaded
 
         self.status_label.setText(message)
 
