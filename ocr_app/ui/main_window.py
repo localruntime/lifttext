@@ -119,13 +119,6 @@ class OCRApp(QMainWindow):
         upload_btn.clicked.connect(self.upload_image)
         button_layout.addWidget(upload_btn)
 
-        # Process button (smart - handles both full image and selection)
-        self.process_btn = QPushButton("Process")
-        self.process_btn.setToolTip("Process the full image, or the selected area if a selection is active")
-        self.process_btn.clicked.connect(self.process)
-        self.process_btn.setEnabled(False)
-        button_layout.addWidget(self.process_btn)
-
         # PDF Navigation Controls (initially hidden)
         self.pdf_nav_widget = QWidget()
         pdf_nav_layout = QHBoxLayout(self.pdf_nav_widget)
@@ -197,6 +190,15 @@ class OCRApp(QMainWindow):
         zoom_toolbar.setContentsMargins(0, 5, 0, 5)
         zoom_toolbar.setSpacing(5)
 
+        # Scan button (smart - handles both full image and selection)
+        self.process_btn = QPushButton("Scan")
+        self.process_btn.setToolTip("Scan the full image, or the selected area if a selection is active")
+        self.process_btn.clicked.connect(self.process)
+        self.process_btn.setEnabled(False)
+        zoom_toolbar.addWidget(self.process_btn)
+
+        zoom_toolbar.addStretch()  # Push zoom controls to the right
+
         zoom_in_btn = QPushButton()
         zoom_in_btn.setIcon(MaterialIcon('zoom_in'))
         zoom_in_btn.setToolTip("Zoom In (+)")
@@ -222,7 +224,6 @@ class OCRApp(QMainWindow):
         self.zoom_label.setMinimumWidth(50)
         zoom_toolbar.addWidget(self.zoom_label)
 
-        zoom_toolbar.addStretch()  # Push buttons to the left
         image_container.addLayout(zoom_toolbar)
 
         scroll_area = QScrollArea()
@@ -316,7 +317,7 @@ class OCRApp(QMainWindow):
     def _load_image(self, file_path):
         """Load a regular image file"""
         self.image_path = file_path
-        self.status_label.setText(f"Loaded: {os.path.basename(file_path)} - Click 'Process' to run OCR")
+        self.status_label.setText(f"Loaded: {os.path.basename(file_path)} - Click 'Scan' to run OCR")
 
         # Load image same way PaddleOCR does
         pil_image = Image.open(file_path)
@@ -333,7 +334,7 @@ class OCRApp(QMainWindow):
             self.image_widget.set_image(pixmap)
 
         self.text_output.clear()
-        self.text_output.setPlaceholderText("Click 'Process' to extract text...")
+        self.text_output.setPlaceholderText("Click 'Scan' to extract text...")
 
         self.process_btn.setEnabled(True)
         self.select_area_btn.setEnabled(True)
@@ -349,7 +350,7 @@ class OCRApp(QMainWindow):
                 self.image_widget.set_image(pixmap)
 
             self.text_output.clear()
-            self.text_output.setPlaceholderText("Click 'Process' to extract text from this page...")
+            self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
 
             self.process_btn.setEnabled(True)
             self.select_area_btn.setEnabled(True)
@@ -375,7 +376,7 @@ class OCRApp(QMainWindow):
             if not pixmap.isNull():
                 self.image_widget.set_image(pixmap)
             self.text_output.clear()
-            self.text_output.setPlaceholderText("Click 'Process' to extract text from this page...")
+            self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
 
     def navigate_to_next_page(self):
         """Navigate to next PDF page"""
@@ -386,7 +387,7 @@ class OCRApp(QMainWindow):
             if not pixmap.isNull():
                 self.image_widget.set_image(pixmap)
             self.text_output.clear()
-            self.text_output.setPlaceholderText("Click 'Process' to extract text from this page...")
+            self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
 
     def show_pdf_navigation(self):
         """Show PDF navigation controls"""
@@ -527,10 +528,10 @@ class OCRApp(QMainWindow):
         self.clear_selection_btn.setEnabled(has_selection)
 
         if has_selection and not is_valid:
-            self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px. 'Process' will process full image.")
+            self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px. 'Scan' will process full image.")
         elif has_selection:
             x, y, w, h = self.image_widget.selection_rect_original
-            self.status_label.setText(f"Selection: {w}x{h}px at ({x}, {y}) - Click 'Process' to run OCR on selection")
+            self.status_label.setText(f"Selection: {w}x{h}px at ({x}, {y}) - Click 'Scan' to run OCR on selection")
 
     # Event handlers
     def on_word_box_clicked(self, word_info):
