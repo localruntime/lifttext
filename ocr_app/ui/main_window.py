@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QTextEdit, QFileDialog, QScrollArea,
     QProgressBar, QSplitter, QDialog
 )
-from PySide6.QtCore import Qt, QSettings, QDir
+from PySide6.QtCore import Qt, QSettings, QDir, QSize
 from PySide6.QtGui import QPixmap
 from qt_material_icons import MaterialIcon
 from PIL import Image
@@ -106,6 +106,7 @@ class OCRApp(QMainWindow):
         # Edit menu
         edit_menu = menubar.addMenu("&Edit")
         settings_action = edit_menu.addAction("Settings...")
+        settings_action.setIcon(MaterialIcon('settings'))
         settings_action.setShortcut("Ctrl+,")
         settings_action.triggered.connect(self.show_settings_dialog)
 
@@ -146,7 +147,11 @@ class OCRApp(QMainWindow):
         self.pdf_nav_widget.setVisible(False)
 
         # Selection mode toggle button
-        self.select_area_btn = QPushButton("Select Area")
+        self.select_area_btn = QPushButton()
+        self.select_area_btn.setIcon(MaterialIcon('crop_free'))
+        self.select_area_btn.setIconSize(QSize(20, 20))
+        self.select_area_btn.setToolTip("Select Area")
+        self.select_area_btn.setMaximumWidth(40)
         self.select_area_btn.setCheckable(True)
         self.select_area_btn.clicked.connect(self.toggle_selection_mode)
         self.select_area_btn.setEnabled(False)
@@ -165,35 +170,13 @@ class OCRApp(QMainWindow):
         button_layout.addWidget(self.clear_selection_btn)
 
         # Settings button
-        settings_btn = QPushButton("Settings")
+        settings_btn = QPushButton()
+        settings_btn.setIcon(MaterialIcon('settings'))
+        settings_btn.setIconSize(QSize(20, 20))
+        settings_btn.setToolTip("Settings (Ctrl+,)")
+        settings_btn.setMaximumWidth(40)
         settings_btn.clicked.connect(self.show_settings_dialog)
         button_layout.addWidget(settings_btn)
-
-        # Add spacer
-        button_layout.addStretch()
-
-        # Zoom controls
-        zoom_in_btn = QPushButton()
-        zoom_in_btn.setIcon(MaterialIcon('zoom_in'))
-        zoom_in_btn.setToolTip("Zoom In (+)")
-        zoom_in_btn.clicked.connect(lambda: self.image_widget.zoom_in())
-        button_layout.addWidget(zoom_in_btn)
-
-        zoom_out_btn = QPushButton()
-        zoom_out_btn.setIcon(MaterialIcon('zoom_out'))
-        zoom_out_btn.setToolTip("Zoom Out (-)")
-        zoom_out_btn.clicked.connect(lambda: self.image_widget.zoom_out())
-        button_layout.addWidget(zoom_out_btn)
-
-        zoom_reset_btn = QPushButton()
-        zoom_reset_btn.setIcon(MaterialIcon('zoom_out_map'))
-        zoom_reset_btn.setToolTip("Reset Zoom")
-        zoom_reset_btn.clicked.connect(lambda: self.image_widget.zoom_reset())
-        button_layout.addWidget(zoom_reset_btn)
-
-        # Zoom level label
-        self.zoom_label = QLabel("100%")
-        button_layout.addWidget(self.zoom_label)
 
         return button_layout
 
@@ -214,6 +197,39 @@ class OCRApp(QMainWindow):
         image_label = QLabel("Image with Detected Words")
         image_container.addWidget(image_label)
 
+        # Add zoom controls toolbar (inline, above scroll area)
+        zoom_toolbar = QHBoxLayout()
+        zoom_toolbar.setContentsMargins(0, 5, 0, 5)
+        zoom_toolbar.setSpacing(5)
+
+        zoom_in_btn = QPushButton()
+        zoom_in_btn.setIcon(MaterialIcon('zoom_in'))
+        zoom_in_btn.setToolTip("Zoom In (+)")
+        zoom_in_btn.setIconSize(QSize(20, 20))
+        zoom_in_btn.setMaximumWidth(40)
+        zoom_toolbar.addWidget(zoom_in_btn)
+
+        zoom_out_btn = QPushButton()
+        zoom_out_btn.setIcon(MaterialIcon('zoom_out'))
+        zoom_out_btn.setToolTip("Zoom Out (-)")
+        zoom_out_btn.setIconSize(QSize(20, 20))
+        zoom_out_btn.setMaximumWidth(40)
+        zoom_toolbar.addWidget(zoom_out_btn)
+
+        zoom_reset_btn = QPushButton()
+        zoom_reset_btn.setIcon(MaterialIcon('zoom_out_map'))
+        zoom_reset_btn.setToolTip("Reset Zoom")
+        zoom_reset_btn.setIconSize(QSize(20, 20))
+        zoom_reset_btn.setMaximumWidth(40)
+        zoom_toolbar.addWidget(zoom_reset_btn)
+
+        self.zoom_label = QLabel("100%")
+        self.zoom_label.setMinimumWidth(50)
+        zoom_toolbar.addWidget(self.zoom_label)
+
+        zoom_toolbar.addStretch()  # Push buttons to the left
+        image_container.addLayout(zoom_toolbar)
+
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setMinimumWidth(450)
@@ -222,8 +238,13 @@ class OCRApp(QMainWindow):
         self.image_widget.setAlignment(Qt.AlignCenter)
         self.image_widget.setMinimumSize(400, 400)
         self.image_widget.word_clicked.connect(self.on_word_box_clicked)
-        self.image_widget.zoom_changed.connect(self.on_zoom_changed)
         self.image_widget.selection_changed.connect(self.on_selection_changed)
+
+        # Connect zoom button signals
+        zoom_in_btn.clicked.connect(self.image_widget.zoom_in)
+        zoom_out_btn.clicked.connect(self.image_widget.zoom_out)
+        zoom_reset_btn.clicked.connect(self.image_widget.zoom_reset)
+        self.image_widget.zoom_changed.connect(lambda zoom: self.zoom_label.setText(f"{int(zoom * 100)}%"))
 
         scroll_area.setWidget(self.image_widget)
         image_container.addWidget(scroll_area)
@@ -531,10 +552,6 @@ class OCRApp(QMainWindow):
                 self.text_output.setText("No words detected in image")
         else:
             self.text_output.setText(word_info.get('text', ''))
-
-    def on_zoom_changed(self, zoom_level):
-        """Update zoom label when zoom level changes"""
-        self.zoom_label.setText(f"{int(zoom_level * 100)}%")
 
     def copy_to_clipboard(self):
         """Copy the extracted text to the clipboard"""
