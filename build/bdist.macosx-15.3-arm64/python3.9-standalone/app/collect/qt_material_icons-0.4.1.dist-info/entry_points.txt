@@ -1,0 +1,2 @@
+[console_scripts]
+qtmaterialicons = qt_material_icons.__main__:main
