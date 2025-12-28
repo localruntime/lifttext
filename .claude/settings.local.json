@@ -16,7 +16,21 @@
       "WebFetch(domain:github.com)",
       "Bash(timeout 3 python:*)",
       "Bash(python3:*)",
-      "Bash(timeout 5 python:*)"
+      "Bash(timeout 5 python:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(/Users/stevenlau/git/ocr/venv/bin/python:*)",
+      "Bash(cat:*)",
+      "Bash(/Users/stevenlau/git/ocr/venv/bin/pip:*)",
+      "Bash(xargs ls:*)",
+      "Bash(du:*)",
+      "Bash(echo:*)",
+      "Bash(pyinstaller:*)",
+      "Bash(timeout:*)",
+      "Bash(dist/PaddleOCR.app/Contents/MacOS/PaddleOCR)",
+      "Bash(open:*)",
+      "Bash(pkill:*)",
+      "Bash(hdiutil create:*)"
     ],
     "deny": [],
     "ask": []

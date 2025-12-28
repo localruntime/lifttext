@@ -6,9 +6,48 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QSplitter, QTreeView, QFileSystemModel)
 from PySide6.QtCore import Qt, QThread, Signal, QRect, QPoint, QSettings, QDir
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont, QIcon
-from paddleocr import PaddleOCR
 from qt_material_icons import MaterialIcon
 import os
+
+
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and PyInstaller bundle."""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        # Running as normal script
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+def setup_bundled_models():
+    """
+    Configure PaddleOCR to use bundled models when running as .app bundle.
+    MUST be called BEFORE importing paddleocr module.
+    """
+    if hasattr(sys, '_MEIPASS'):
+        # Running as PyInstaller bundle
+        bundled_models_dir = os.path.join(sys._MEIPASS, 'models')
+
+        if os.path.exists(bundled_models_dir):
+            # Set environment variable BEFORE importing paddleocr
+            os.environ['PADDLE_PDX_CACHE_HOME'] = bundled_models_dir
+            print(f"Using bundled models from: {bundled_models_dir}")
+            return bundled_models_dir
+        else:
+            print(f"WARNING: Bundled models not found at {bundled_models_dir}")
+            print("PaddleOCR will try to download models from internet...")
+
+    return None
+
+
+# Call setup BEFORE importing paddleocr
+setup_bundled_models()
+
+# Now import paddleocr (it will read PADDLE_PDX_CACHE_HOME)
+from paddleocr import PaddleOCR
 
 
 class ImageWithBoxes(QLabel):
