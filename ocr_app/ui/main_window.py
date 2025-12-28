@@ -114,11 +114,6 @@ class OCRApp(QMainWindow):
         """Create the toolbar with buttons and controls"""
         button_layout = QHBoxLayout()
 
-        # Upload button
-        upload_btn = QPushButton("Upload Image")
-        upload_btn.clicked.connect(self.upload_image)
-        button_layout.addWidget(upload_btn)
-
         # PDF Navigation Controls (initially hidden)
         self.pdf_nav_widget = QWidget()
         pdf_nav_layout = QHBoxLayout(self.pdf_nav_widget)
@@ -140,22 +135,8 @@ class OCRApp(QMainWindow):
         button_layout.addWidget(self.pdf_nav_widget)
         self.pdf_nav_widget.setVisible(False)
 
-        # Selection mode toggle button
-        self.select_area_btn = QPushButton()
-        self.select_area_btn.setIcon(MaterialIcon('crop_free'))
-        self.select_area_btn.setIconSize(QSize(20, 20))
-        self.select_area_btn.setToolTip("Select Area")
-        self.select_area_btn.setMaximumWidth(40)
-        self.select_area_btn.setCheckable(True)
-        self.select_area_btn.clicked.connect(self.toggle_selection_mode)
-        self.select_area_btn.setEnabled(False)
-        button_layout.addWidget(self.select_area_btn)
-
-        # Clear selection button
-        self.clear_selection_btn = QPushButton("Clear Selection")
-        self.clear_selection_btn.clicked.connect(self.clear_selection)
-        self.clear_selection_btn.setEnabled(False)
-        button_layout.addWidget(self.clear_selection_btn)
+        # Add stretch to push Settings button to the right
+        button_layout.addStretch()
 
         # Settings button
         settings_btn = QPushButton()
@@ -175,6 +156,7 @@ class OCRApp(QMainWindow):
         # LEFT PANEL: File Explorer
         self.explorer_widget = FileExplorerWidget(self)
         self.explorer_widget.file_selected.connect(self.on_file_selected)
+        self.explorer_widget.upload_requested.connect(self.upload_image)
         self.explorer_widget.restore_last_directory(self.settings)
 
         # CENTER PANEL: Image Viewer
@@ -196,6 +178,17 @@ class OCRApp(QMainWindow):
         self.process_btn.clicked.connect(self.process)
         self.process_btn.setEnabled(False)
         zoom_toolbar.addWidget(self.process_btn)
+
+        # Selection mode toggle button
+        self.select_area_btn = QPushButton()
+        self.select_area_btn.setIcon(MaterialIcon('crop_free'))
+        self.select_area_btn.setIconSize(QSize(20, 20))
+        self.select_area_btn.setToolTip("Select Area")
+        self.select_area_btn.setMaximumWidth(40)
+        self.select_area_btn.setCheckable(True)
+        self.select_area_btn.clicked.connect(self.toggle_selection_mode)
+        self.select_area_btn.setEnabled(False)
+        zoom_toolbar.addWidget(self.select_area_btn)
 
         zoom_toolbar.addStretch()  # Push zoom controls to the right
 
@@ -510,22 +503,15 @@ class OCRApp(QMainWindow):
         if enabled:
             self.status_label.setText("Selection mode active - draw a rectangle on the image")
         else:
+            # Update UI state when selection mode is disabled
+            self.process_btn.setEnabled(True)
+            self.current_crop_rect = None
+            self.is_processing_selection = False
             self.status_label.setText("Selection mode disabled")
-
-    def clear_selection(self):
-        """Clear the selection and return to normal mode"""
-        self.image_widget.clear_selection()
-        self.image_widget.set_selection_mode(False)
-        self.select_area_btn.setChecked(False)
-        self.process_btn.setEnabled(True)
-        self.current_crop_rect = None
-        self.is_processing_selection = False
-        self.status_label.setText("Selection cleared")
 
     def on_selection_changed(self, has_selection):
         """Handle selection state changes"""
         is_valid = has_selection and self.image_widget.validate_selection()
-        self.clear_selection_btn.setEnabled(has_selection)
 
         if has_selection and not is_valid:
             self.status_label.setText(f"Selection too small - minimum {self.image_widget.MIN_SELECTION_SIZE}px. 'Scan' will process full image.")

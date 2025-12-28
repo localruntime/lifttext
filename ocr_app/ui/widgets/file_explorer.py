@@ -1,12 +1,14 @@
 """File explorer widget for browsing and selecting image/PDF files"""
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTreeView, QFileSystemModel
-from PySide6.QtCore import Qt, Signal, QDir
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTreeView, QFileSystemModel, QPushButton
+from PySide6.QtCore import Qt, Signal, QDir, QSize
+from qt_material_icons import MaterialIcon
 import os
 
 
 class FileExplorerWidget(QWidget):
     """File explorer widget with image file filtering"""
     file_selected = Signal(str)  # Emits absolute file path when image selected
+    upload_requested = Signal()  # Emits when upload button is clicked
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,6 +65,14 @@ class FileExplorerWidget(QWidget):
         self.tree_view.clicked.connect(self.on_item_clicked)
 
         layout.addWidget(self.tree_view)
+
+        # Upload button at the bottom with folder icon
+        self.upload_btn = QPushButton()
+        self.upload_btn.setIcon(MaterialIcon('folder_open'))
+        self.upload_btn.setIconSize(QSize(24, 24))
+        self.upload_btn.setToolTip("Upload Image or PDF")
+        self.upload_btn.clicked.connect(self.upload_requested.emit)
+        layout.addWidget(self.upload_btn)
 
         # Set minimum width for explorer panel
         self.setMinimumWidth(150)
