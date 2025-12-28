@@ -37,26 +37,56 @@ run.bat         # Windows
 
 ## Architecture
 
-### Single-File Application (`main.py`)
+### Layered Package Structure
 
-The application consists of three main components:
+The application is organized into a clean package structure with separation of concerns:
 
-1. **`ImageWithBoxes` (QLabel subclass)**: Custom widget that renders images with clickable word bounding boxes
-   - Handles coordinate transformation from original image space to scaled display space
-   - Manages hover/selection states for interactive boxes
+```
+ocr_app/
+├── core/               # Core business logic
+│   ├── ocr_worker.py   # OCRWorker background thread
+│   └── pdf_handler.py  # PDF loading and page navigation
+├── ui/                 # User interface components
+│   ├── main_window.py  # Main application window (OCRApp)
+│   ├── widgets/        # Custom widgets
+│   │   ├── image_viewer.py    # ImageWithBoxes (with mixins)
+│   │   ├── image_mixins.py    # ZoomPanMixin, SelectionMixin, RenderingMixin
+│   │   └── file_explorer.py   # FileExplorerWidget
+│   └── dialogs/        # Dialog windows
+│       └── settings_dialog.py # SettingsDialog
+└── utils/              # Utility functions
+    ├── resources.py    # Resource path helpers, model setup
+    └── constants.py    # Application constants
+```
+
+### Key Components
+
+1. **`ImageWithBoxes`** (ocr_app/ui/widgets/image_viewer.py): Custom widget using mixin composition
+   - **ZoomPanMixin**: Handles zoom (in/out/reset) and pan (drag with middle/right mouse)
+   - **SelectionMixin**: Manages selection rectangle, coordinate conversion, handle dragging
+   - **RenderingMixin**: Draws image, word boxes, and selection overlay
    - Uses ray-casting algorithm for point-in-polygon detection
    - Key method: `paintEvent()` draws boxes using scaled coordinates with `scale_factor` and offsets
 
-2. **`OCRWorker` (QThread)**: Background thread for OCR processing
+2. **`OCRWorker`** (ocr_app/core/ocr_worker.py): Background QThread for OCR processing
    - Initializes PaddleOCR v3 with mobile models for speed
    - Uses `predict()` method (not deprecated `ocr()`)
    - Emits signals: `words_detected`, `finished`, `error`, `progress`, `preprocessed_image`
    - Handles both dictionary and list result formats from PaddleOCR
+   - Supports cropping for selection-based OCR
 
-3. **`OCRApp` (QMainWindow)**: Main application window
-   - Side-by-side layout: image viewer with boxes on left, text output on right
+3. **`PDFHandler`** (ocr_app/core/pdf_handler.py): PDF file management
+   - Loads PDF files using PyMuPDF (fitz)
+   - Renders pages to temporary PNG files
+   - Caches up to 10 pages for fast navigation
+   - Provides page navigation (prev/next) and state management
+
+4. **`OCRApp`** (ocr_app/ui/main_window.py): Main application window
+   - 3-panel layout: file explorer, image viewer with boxes, text output
    - Connects OCRWorker signals to UI update slots
-   - Manages image loading with PIL to ensure consistent preprocessing
+   - Manages image/PDF loading with PIL for consistent preprocessing
+   - Delegates PDF handling to PDFHandler
+   - Uses QSettings for persistent configuration
 
 ### PaddleOCR v3 Configuration
 
@@ -99,6 +129,42 @@ python test_ocr_direct.py
 # Create test image
 python create_test.py
 ```
+
+## Import Examples
+
+```python
+# Import core components
+from ocr_app.core import OCRWorker, PDFHandler
+
+# Import UI widgets
+from ocr_app.ui.widgets import ImageWithBoxes, FileExplorerWidget
+from ocr_app.ui.dialogs import SettingsDialog
+
+# Import utilities
+from ocr_app.utils import get_resource_path, setup_bundled_models
+from ocr_app.utils.constants import DETECTION_MODELS, SUPPORTED_LANGUAGES
+
+# Import main window and entry point
+from ocr_app.ui.main_window import OCRApp, main
+```
+
+## Mixin Pattern
+
+The `ImageWithBoxes` widget uses mixin composition for modularity:
+
+```python
+class ImageWithBoxes(QLabel, ZoomPanMixin, SelectionMixin, RenderingMixin):
+    def __init__(self):
+        QLabel.__init__(self)
+        self.__init_zoom_pan__()      # Initialize zoom/pan properties
+        self.__init_selection__()      # Initialize selection properties
+        # RenderingMixin has no state, just rendering methods
+```
+
+Each mixin is responsible for a specific concern:
+- **ZoomPanMixin** (~150 lines): Zoom level, pan offset, zoom/pan methods
+- **SelectionMixin** (~250 lines): Selection rectangle, coordinate conversion, handle management
+- **RenderingMixin** (~100 lines): Rendering image, word boxes, and selection overlay
 
 ## Key Implementation Notes
 

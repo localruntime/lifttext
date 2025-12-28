@@ -30,7 +30,9 @@
       "Bash(dist/PaddleOCR.app/Contents/MacOS/PaddleOCR)",
       "Bash(open:*)",
       "Bash(pkill:*)",
-      "Bash(hdiutil create:*)"
+      "Bash(hdiutil create:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []
