@@ -320,6 +320,9 @@ class OCRApp(QMainWindow):
     def load_image_from_path(self, file_path):
         """Load image or PDF from given path"""
         if self._is_pdf_file(file_path):
+            # Reset PDF state before loading new PDF to clear cache
+            if self.pdf_handler.current_pdf_path != file_path:
+                self.pdf_handler.reset_pdf_state()
             self._load_pdf(file_path)
         else:
             self.pdf_handler.reset_pdf_state()
