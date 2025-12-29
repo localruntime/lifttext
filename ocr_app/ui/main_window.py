@@ -114,27 +114,6 @@ class OCRApp(QMainWindow):
         """Create the toolbar with buttons and controls"""
         button_layout = QHBoxLayout()
 
-        # PDF Navigation Controls (initially hidden)
-        self.pdf_nav_widget = QWidget()
-        pdf_nav_layout = QHBoxLayout(self.pdf_nav_widget)
-        pdf_nav_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.prev_page_btn = QPushButton("← Prev")
-        self.prev_page_btn.clicked.connect(self.navigate_to_prev_page)
-        pdf_nav_layout.addWidget(self.prev_page_btn)
-
-        self.page_label = QLabel("Page 1 of 1")
-        self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.page_label.setMinimumWidth(100)
-        pdf_nav_layout.addWidget(self.page_label)
-
-        self.next_page_btn = QPushButton("Next →")
-        self.next_page_btn.clicked.connect(self.navigate_to_next_page)
-        pdf_nav_layout.addWidget(self.next_page_btn)
-
-        button_layout.addWidget(self.pdf_nav_widget)
-        self.pdf_nav_widget.setVisible(False)
-
         # Add stretch to push Settings button to the right
         button_layout.addStretch()
 
@@ -250,6 +229,32 @@ class OCRApp(QMainWindow):
 
         image_container.addWidget(self.zoom_controls_widget)
         self.zoom_controls_widget.setVisible(False)  # Hidden until image is loaded
+
+        # PDF pagination controls at the bottom (initially hidden, shown only for PDFs)
+        self.pdf_controls_widget = QWidget()
+        pdf_toolbar = QHBoxLayout(self.pdf_controls_widget)
+        pdf_toolbar.setContentsMargins(0, 5, 0, 0)
+        pdf_toolbar.setSpacing(5)
+
+        pdf_toolbar.addStretch()  # Center the pagination controls
+
+        self.prev_page_btn = QPushButton("← Prev")
+        self.prev_page_btn.clicked.connect(self.navigate_to_prev_page)
+        pdf_toolbar.addWidget(self.prev_page_btn)
+
+        self.page_label = QLabel("Page 1 of 1")
+        self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.page_label.setMinimumWidth(100)
+        pdf_toolbar.addWidget(self.page_label)
+
+        self.next_page_btn = QPushButton("Next →")
+        self.next_page_btn.clicked.connect(self.navigate_to_next_page)
+        pdf_toolbar.addWidget(self.next_page_btn)
+
+        pdf_toolbar.addStretch()  # Center the pagination controls
+
+        image_container.addWidget(self.pdf_controls_widget)
+        self.pdf_controls_widget.setVisible(False)  # Hidden until PDF is loaded
 
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
@@ -399,11 +404,11 @@ class OCRApp(QMainWindow):
 
     def show_pdf_navigation(self):
         """Show PDF navigation controls"""
-        self.pdf_nav_widget.setVisible(True)
+        self.pdf_controls_widget.setVisible(True)
 
     def hide_pdf_navigation(self):
         """Hide PDF navigation controls"""
-        self.pdf_nav_widget.setVisible(False)
+        self.pdf_controls_widget.setVisible(False)
 
     def update_page_label(self):
         """Update page indicator text"""
