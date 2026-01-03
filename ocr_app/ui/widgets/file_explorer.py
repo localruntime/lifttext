@@ -1,8 +1,7 @@
 """File explorer widget for browsing and selecting image/PDF files"""
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTreeView, QFileSystemModel, QPushButton
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTreeView, QFileSystemModel
 from PySide6.QtCore import Qt, Signal, QDir, QSize
 from PySide6.QtGui import QFont
-from qt_material_icons import MaterialIcon
 import os
 
 
@@ -26,14 +25,6 @@ class FileExplorerWidget(QWidget):
         default_font = QFont()
         smaller_font = QFont(default_font)
         smaller_font.setPointSizeF(default_font.pointSizeF() * 0.8)
-
-        # Header label
-        label = QLabel("File Explorer")
-        label.setFont(smaller_font)
-        # Use stylesheet to override Material Design theme font
-        font_size = int(smaller_font.pointSizeF())
-        label.setStyleSheet(f"QLabel {{ font-size: {font_size}pt; }}")
-        layout.addWidget(label)
 
         # File system model
         self.file_model = QFileSystemModel()
@@ -95,14 +86,6 @@ class FileExplorerWidget(QWidget):
         self.tree_view.clicked.connect(self.on_item_clicked)
 
         layout.addWidget(self.tree_view)
-
-        # Upload button at the bottom with folder icon
-        self.upload_btn = QPushButton()
-        self.upload_btn.setIcon(MaterialIcon('folder_open'))
-        self.upload_btn.setIconSize(QSize(24, 24))
-        self.upload_btn.setToolTip("Upload Image or PDF")
-        self.upload_btn.clicked.connect(self.upload_requested.emit)
-        layout.addWidget(self.upload_btn)
 
         # Set minimum width for explorer panel
         self.setMinimumWidth(150)

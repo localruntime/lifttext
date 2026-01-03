@@ -73,14 +73,20 @@ class OCRApp(QMainWindow):
         # Create menu bar
         self._create_menu_bar()
 
-        # Central widget and main layout
+        # Central widget and main horizontal layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
+        horizontal_layout = QHBoxLayout(central_widget)
+        horizontal_layout.setContentsMargins(0, 0, 0, 0)
+        horizontal_layout.setSpacing(0)
 
-        # Create toolbar
-        button_layout = self._create_toolbar()
-        main_layout.addLayout(button_layout)
+        # Create left sidebar toolbar
+        left_sidebar = self._create_left_sidebar()
+        horizontal_layout.addWidget(left_sidebar)
+
+        # Create right side content (everything else)
+        content_widget = QWidget()
+        main_layout = QVBoxLayout(content_widget)
 
         # Create main panels
         self.content_splitter = self._create_main_panels()
@@ -96,6 +102,8 @@ class OCRApp(QMainWindow):
         self.status_label = QLabel("Ready")
         main_layout.addWidget(self.status_label)
 
+        horizontal_layout.addWidget(content_widget, 1)
+
     def _create_menu_bar(self):
         """Create the menu bar"""
         menubar = self.menuBar()
@@ -110,23 +118,39 @@ class OCRApp(QMainWindow):
         settings_action.setShortcut("Ctrl+,")
         settings_action.triggered.connect(self.show_settings_dialog)
 
-    def _create_toolbar(self):
-        """Create the toolbar with buttons and controls"""
-        button_layout = QHBoxLayout()
+    def _create_left_sidebar(self):
+        """Create the left sidebar toolbar with Search and Settings buttons"""
+        sidebar = QWidget()
+        sidebar.setMaximumWidth(50)
+        sidebar.setStyleSheet("QWidget { background-color: palette(window); }")
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(5, 5, 5, 5)
+        sidebar_layout.setSpacing(10)
 
-        # Add stretch to push Settings button to the right
-        button_layout.addStretch()
+        # Search/Upload button at the top
+        self.upload_btn = QPushButton()
+        self.upload_btn.setIcon(MaterialIcon('search'))
+        self.upload_btn.setIconSize(QSize(24, 24))
+        self.upload_btn.setToolTip("Upload Image or PDF")
+        self.upload_btn.setMinimumSize(40, 40)
+        self.upload_btn.setMaximumSize(40, 40)
+        self.upload_btn.clicked.connect(self.upload_image)
+        sidebar_layout.addWidget(self.upload_btn)
 
-        # Settings button
+        # Add stretch to push Settings button to the bottom
+        sidebar_layout.addStretch()
+
+        # Settings button at the bottom
         settings_btn = QPushButton()
         settings_btn.setIcon(MaterialIcon('settings'))
-        settings_btn.setIconSize(QSize(20, 20))
+        settings_btn.setIconSize(QSize(24, 24))
         settings_btn.setToolTip("Settings (Ctrl+,)")
-        settings_btn.setMaximumWidth(40)
+        settings_btn.setMinimumSize(40, 40)
+        settings_btn.setMaximumSize(40, 40)
         settings_btn.clicked.connect(self.show_settings_dialog)
-        button_layout.addWidget(settings_btn)
+        sidebar_layout.addWidget(settings_btn)
 
-        return button_layout
+        return sidebar
 
     def _create_main_panels(self):
         """Create the main 3-panel layout"""
@@ -308,17 +332,7 @@ class OCRApp(QMainWindow):
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
         text_container = QVBoxLayout(text_panel)
-        text_container.setContentsMargins(0, 5, 0, 5)
-
-        text_label = QLabel("Extracted Text")
-        # Match File Explorer font size (80% of default)
-        default_font = QFont()
-        smaller_font = QFont(default_font)
-        smaller_font.setPointSizeF(default_font.pointSizeF() * 0.8)
-        text_label.setFont(smaller_font)
-        font_size = int(smaller_font.pointSizeF())
-        text_label.setStyleSheet(f"QLabel {{ font-size: {font_size}pt; }}")
-        text_container.addWidget(text_label)
+        text_container.setContentsMargins(0, 0, 0, 0)
 
         self.text_output = QTextEdit()
         self.text_output.setReadOnly(True)
