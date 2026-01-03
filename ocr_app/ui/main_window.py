@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QSplitter, QDialog
 )
 from PySide6.QtCore import Qt, QSettings, QDir, QSize
-from PySide6.QtGui import QPixmap, QPalette, QColor
+from PySide6.QtGui import QPixmap, QPalette, QColor, QFont
 from qt_material_icons import MaterialIcon
 from PIL import Image
 import tempfile
@@ -308,14 +308,31 @@ class OCRApp(QMainWindow):
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
         text_container = QVBoxLayout(text_panel)
-        text_container.setContentsMargins(0, 0, 0, 0)
+        text_container.setContentsMargins(0, 5, 0, 5)
 
         text_label = QLabel("Extracted Text")
+        # Match File Explorer font size (80% of default)
+        default_font = QFont()
+        smaller_font = QFont(default_font)
+        smaller_font.setPointSizeF(default_font.pointSizeF() * 0.8)
+        text_label.setFont(smaller_font)
+        font_size = int(smaller_font.pointSizeF())
+        text_label.setStyleSheet(f"QLabel {{ font-size: {font_size}pt; }}")
         text_container.addWidget(text_label)
 
         self.text_output = QTextEdit()
         self.text_output.setReadOnly(True)
         self.text_output.setPlaceholderText("Extracted text will appear here...")
+        # Remove widget padding but keep text content padding
+        self.text_output.setStyleSheet("""
+            QTextEdit {
+                border: none;
+                padding: 0px;
+                margin: 0px;
+            }
+        """)
+        # Add padding around text content only (not affecting scrollbar)
+        self.text_output.document().setDocumentMargin(8)
         text_container.addWidget(self.text_output)
 
         self.copy_btn = QPushButton("Copy to Clipboard")
