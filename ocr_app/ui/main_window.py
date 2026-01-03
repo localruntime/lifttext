@@ -308,7 +308,7 @@ class OCRApp(QMainWindow):
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
         text_container = QVBoxLayout(text_panel)
-        text_container.setContentsMargins(5, 5, 5, 5)
+        text_container.setContentsMargins(0, 0, 0, 0)
 
         text_label = QLabel("Extracted Text")
         text_container.addWidget(text_label)
