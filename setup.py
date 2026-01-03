@@ -87,8 +87,9 @@ OPTIONS = {
         str(qt_material_root / 'themes'),
         str(qt_material_root / 'resources'),
     ],
-    'semi_standalone': False,
+    'semi_standalone': True,  # Don't modify bundled libraries (avoids permission errors)
     'site_packages': True,
+    'no_chdir': True,  # Prevent working directory changes
 }
 
 setup(

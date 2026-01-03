@@ -1,6 +1,7 @@
 """File explorer widget for browsing and selecting image/PDF files"""
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTreeView, QFileSystemModel, QPushButton
 from PySide6.QtCore import Qt, Signal, QDir, QSize
+from PySide6.QtGui import QFont
 from qt_material_icons import MaterialIcon
 import os
 
@@ -21,8 +22,17 @@ class FileExplorerWidget(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        # Configure font size (80% of default = 20% decrease)
+        default_font = QFont()
+        smaller_font = QFont(default_font)
+        smaller_font.setPointSizeF(default_font.pointSizeF() * 0.8)
+
         # Header label
         label = QLabel("File Explorer")
+        label.setFont(smaller_font)
+        # Use stylesheet to override Material Design theme font
+        font_size = int(smaller_font.pointSizeF())
+        label.setStyleSheet(f"QLabel {{ font-size: {font_size}pt; }}")
         layout.addWidget(label)
 
         # File system model
@@ -47,13 +57,33 @@ class FileExplorerWidget(QWidget):
         # self.tree_view.setRootIndex(self.file_model.index(QDir.homePath()))
 
         # Configure tree view appearance
+        self.tree_view.setFont(smaller_font)
+        # Use stylesheet to override Material Design theme font
+        font_size = int(smaller_font.pointSizeF())
+        self.tree_view.setStyleSheet(f"""
+            QTreeView {{
+                font-size: {font_size}pt !important;
+            }}
+            QTreeView::item {{
+                padding: 0px 2px !important;
+                margin: 0px !important;
+                height: 20px !important;
+                min-height: 20px !important;
+                max-height: 20px !important;
+            }}
+            QTreeView::branch {{
+                width: 10px !important;
+            }}
+        """)
+        # Set smaller icon size
+        self.tree_view.setIconSize(QSize(12, 12))
         self.tree_view.setAnimated(True)
-        self.tree_view.setIndentation(20)
+        self.tree_view.setIndentation(12)
         self.tree_view.setSortingEnabled(True)
         self.tree_view.sortByColumn(0, Qt.AscendingOrder)
 
-        # Hide unnecessary columns (keep only name column visible)
-        self.tree_view.setHeaderHidden(False)
+        # Hide header bar completely
+        self.tree_view.setHeaderHidden(True)
         self.tree_view.hideColumn(1)  # Size
         self.tree_view.hideColumn(2)  # Type
         self.tree_view.hideColumn(3)  # Date modified

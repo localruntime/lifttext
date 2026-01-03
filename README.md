@@ -81,6 +81,27 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### Build for prod distro
+
+```cmd
+source venv/bin/activate
+python setup.py py2app
+open dist/PaddleOCR.app
+```
+
+### 
+  Creating a Distributable DMG
+
+  Once the app is built, create a disk image for distribution:
+
+  # Create a DMG file
+  hdiutil create -volname "PaddleOCR" \
+    -srcfolder dist/PaddleOCR.app \
+    -ov -format UDZO \
+    PaddleOCR-1.0.0.dmg
+
+  This creates PaddleOCR-1.0.0.dmg that users can download, open, and drag to Applications.
+
 ## Features
 
 - Upload images (PNG, JPG, JPEG, BMP)

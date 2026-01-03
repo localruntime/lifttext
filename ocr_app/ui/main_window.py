@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QSplitter, QDialog
 )
 from PySide6.QtCore import Qt, QSettings, QDir, QSize
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QPalette, QColor
 from qt_material_icons import MaterialIcon
 from PIL import Image
 import tempfile
@@ -140,11 +140,18 @@ class OCRApp(QMainWindow):
 
         # CENTER PANEL: Image Viewer
         image_panel = QWidget()
+        # Set background color for the entire image panel
+        image_panel.setStyleSheet("""
+            QWidget {
+                background-color: rgb(252, 252, 252);
+            }
+            QPushButton {
+                background-color: palette(button);
+            }
+        """)
+        image_panel.setAutoFillBackground(True)
         image_container = QVBoxLayout(image_panel)
         image_container.setContentsMargins(5, 5, 5, 5)
-
-        image_label = QLabel("Image with Detected Words")
-        image_container.addWidget(image_label)
 
         # Add action toolbar (Scan and Select Area buttons)
         action_toolbar = QHBoxLayout()
@@ -173,88 +180,130 @@ class OCRApp(QMainWindow):
 
         image_container.addLayout(action_toolbar)
 
+        # Create horizontal layout for left toolbar and image viewer
+        viewer_layout = QHBoxLayout()
+        viewer_layout.setContentsMargins(0, 0, 0, 0)
+        viewer_layout.setSpacing(5)
+
+        # LEFT VERTICAL TOOLBAR (Zoom and PDF pagination controls)
+        left_toolbar = QWidget()
+        left_toolbar.setStyleSheet("QWidget { background-color: rgb(252, 252, 252); }")
+        left_toolbar_layout = QVBoxLayout(left_toolbar)
+        left_toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        left_toolbar_layout.setSpacing(8)
+        left_toolbar.setMaximumWidth(50)
+
+        # Zoom controls (initially hidden)
+        self.zoom_in_btn = QPushButton()
+        self.zoom_in_btn.setIcon(MaterialIcon('zoom_in'))
+        self.zoom_in_btn.setToolTip("Zoom In (+)")
+        self.zoom_in_btn.setIconSize(QSize(24, 24))
+        self.zoom_in_btn.setMinimumSize(40, 40)
+        self.zoom_in_btn.setMaximumSize(40, 40)
+        left_toolbar_layout.addWidget(self.zoom_in_btn)
+
+        self.zoom_out_btn = QPushButton()
+        self.zoom_out_btn.setIcon(MaterialIcon('zoom_out'))
+        self.zoom_out_btn.setToolTip("Zoom Out (-)")
+        self.zoom_out_btn.setIconSize(QSize(24, 24))
+        self.zoom_out_btn.setMinimumSize(40, 40)
+        self.zoom_out_btn.setMaximumSize(40, 40)
+        left_toolbar_layout.addWidget(self.zoom_out_btn)
+
+        self.zoom_reset_btn = QPushButton()
+        self.zoom_reset_btn.setIcon(MaterialIcon('zoom_out_map'))
+        self.zoom_reset_btn.setToolTip("Reset Zoom")
+        self.zoom_reset_btn.setIconSize(QSize(24, 24))
+        self.zoom_reset_btn.setMinimumSize(40, 40)
+        self.zoom_reset_btn.setMaximumSize(40, 40)
+        left_toolbar_layout.addWidget(self.zoom_reset_btn)
+
+        # Add separator space between zoom and PDF controls
+        left_toolbar_layout.addSpacing(20)
+
+        # PDF pagination controls (initially hidden, shown only for PDFs)
+        self.prev_page_btn = QPushButton()
+        self.prev_page_btn.setIcon(MaterialIcon('keyboard_arrow_up'))
+        self.prev_page_btn.setToolTip("Previous Page")
+        self.prev_page_btn.setIconSize(QSize(24, 24))
+        self.prev_page_btn.setMinimumSize(40, 40)
+        self.prev_page_btn.setMaximumSize(40, 40)
+        self.prev_page_btn.clicked.connect(self.navigate_to_prev_page)
+        left_toolbar_layout.addWidget(self.prev_page_btn)
+
+        self.page_label = QLabel("1")
+        self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.page_label.setMinimumWidth(40)
+        self.page_label.setMaximumWidth(40)
+        left_toolbar_layout.addWidget(self.page_label)
+
+        self.next_page_btn = QPushButton()
+        self.next_page_btn.setIcon(MaterialIcon('keyboard_arrow_down'))
+        self.next_page_btn.setToolTip("Next Page")
+        self.next_page_btn.setIconSize(QSize(24, 24))
+        self.next_page_btn.setMinimumSize(40, 40)
+        self.next_page_btn.setMaximumSize(40, 40)
+        self.next_page_btn.clicked.connect(self.navigate_to_next_page)
+        left_toolbar_layout.addWidget(self.next_page_btn)
+
+        left_toolbar_layout.addStretch()  # Push controls to the top
+
+        # Initially hide zoom and PDF controls
+        self.zoom_in_btn.setVisible(False)
+        self.zoom_out_btn.setVisible(False)
+        self.zoom_reset_btn.setVisible(False)
+        self.prev_page_btn.setVisible(False)
+        self.page_label.setVisible(False)
+        self.next_page_btn.setVisible(False)
+
+        viewer_layout.addWidget(left_toolbar)
+
+        # Image scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setMinimumWidth(450)
+        # Set background color to RGB(252, 252, 252) - force override theme
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                background-color: rgb(252, 252, 252) !important;
+                border: none;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: rgb(252, 252, 252) !important;
+            }
+        """)
 
         self.image_widget = ImageWithBoxes()
         self.image_widget.setAlignment(Qt.AlignCenter)
         self.image_widget.setMinimumSize(400, 400)
+        # Set background color without border
+        self.image_widget.setStyleSheet("""
+            ImageWithBoxes {
+                border: none;
+                background-color: rgb(252, 252, 252) !important;
+            }
+        """)
         self.image_widget.word_clicked.connect(self.on_word_box_clicked)
         self.image_widget.selection_changed.connect(self.on_selection_changed)
+        self.image_widget.zoom_changed.connect(self.on_zoom_changed)
 
         scroll_area.setWidget(self.image_widget)
-        image_container.addWidget(scroll_area)
 
-        # Zoom controls at the bottom (initially hidden)
-        self.zoom_controls_widget = QWidget()
-        zoom_toolbar = QHBoxLayout(self.zoom_controls_widget)
-        zoom_toolbar.setContentsMargins(0, 5, 0, 0)
-        zoom_toolbar.setSpacing(5)
+        # Programmatically set the viewport background color to override theme
+        viewport_palette = scroll_area.viewport().palette()
+        viewport_palette.setColor(QPalette.Window, QColor(252, 252, 252))
+        viewport_palette.setColor(QPalette.Base, QColor(252, 252, 252))
+        scroll_area.viewport().setPalette(viewport_palette)
+        scroll_area.viewport().setAutoFillBackground(True)
 
-        zoom_toolbar.addStretch()  # Center the zoom controls
+        viewer_layout.addWidget(scroll_area, 1)  # Stretch factor 1 to fill remaining space
 
-        zoom_in_btn = QPushButton()
-        zoom_in_btn.setIcon(MaterialIcon('zoom_in'))
-        zoom_in_btn.setToolTip("Zoom In (+)")
-        zoom_in_btn.setIconSize(QSize(20, 20))
-        zoom_in_btn.setMaximumWidth(40)
-        zoom_toolbar.addWidget(zoom_in_btn)
+        # Connect zoom button signals after image_widget is created
+        self.zoom_in_btn.clicked.connect(self.image_widget.zoom_in)
+        self.zoom_out_btn.clicked.connect(self.image_widget.zoom_out)
+        self.zoom_reset_btn.clicked.connect(self.image_widget.zoom_reset)
 
-        zoom_out_btn = QPushButton()
-        zoom_out_btn.setIcon(MaterialIcon('zoom_out'))
-        zoom_out_btn.setToolTip("Zoom Out (-)")
-        zoom_out_btn.setIconSize(QSize(20, 20))
-        zoom_out_btn.setMaximumWidth(40)
-        zoom_toolbar.addWidget(zoom_out_btn)
-
-        zoom_reset_btn = QPushButton()
-        zoom_reset_btn.setIcon(MaterialIcon('zoom_out_map'))
-        zoom_reset_btn.setToolTip("Reset Zoom")
-        zoom_reset_btn.setIconSize(QSize(20, 20))
-        zoom_reset_btn.setMaximumWidth(40)
-        zoom_toolbar.addWidget(zoom_reset_btn)
-
-        self.zoom_label = QLabel("100%")
-        self.zoom_label.setMinimumWidth(50)
-        zoom_toolbar.addWidget(self.zoom_label)
-
-        zoom_toolbar.addStretch()  # Center the zoom controls
-
-        # Connect zoom button signals
-        zoom_in_btn.clicked.connect(self.image_widget.zoom_in)
-        zoom_out_btn.clicked.connect(self.image_widget.zoom_out)
-        zoom_reset_btn.clicked.connect(self.image_widget.zoom_reset)
-        self.image_widget.zoom_changed.connect(lambda zoom: self.zoom_label.setText(f"{int(zoom * 100)}%"))
-
-        image_container.addWidget(self.zoom_controls_widget)
-        self.zoom_controls_widget.setVisible(False)  # Hidden until image is loaded
-
-        # PDF pagination controls at the bottom (initially hidden, shown only for PDFs)
-        self.pdf_controls_widget = QWidget()
-        pdf_toolbar = QHBoxLayout(self.pdf_controls_widget)
-        pdf_toolbar.setContentsMargins(0, 5, 0, 0)
-        pdf_toolbar.setSpacing(5)
-
-        pdf_toolbar.addStretch()  # Center the pagination controls
-
-        self.prev_page_btn = QPushButton("← Prev")
-        self.prev_page_btn.clicked.connect(self.navigate_to_prev_page)
-        pdf_toolbar.addWidget(self.prev_page_btn)
-
-        self.page_label = QLabel("Page 1 of 1")
-        self.page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.page_label.setMinimumWidth(100)
-        pdf_toolbar.addWidget(self.page_label)
-
-        self.next_page_btn = QPushButton("Next →")
-        self.next_page_btn.clicked.connect(self.navigate_to_next_page)
-        pdf_toolbar.addWidget(self.next_page_btn)
-
-        pdf_toolbar.addStretch()  # Center the pagination controls
-
-        image_container.addWidget(self.pdf_controls_widget)
-        self.pdf_controls_widget.setVisible(False)  # Hidden until PDF is loaded
+        image_container.addLayout(viewer_layout, 1)
 
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
@@ -269,9 +318,9 @@ class OCRApp(QMainWindow):
         self.text_output.setPlaceholderText("Extracted text will appear here...")
         text_container.addWidget(self.text_output)
 
-        copy_btn = QPushButton("Copy to Clipboard")
-        copy_btn.clicked.connect(self.copy_to_clipboard)
-        text_container.addWidget(copy_btn)
+        self.copy_btn = QPushButton("Copy to Clipboard")
+        self.copy_btn.clicked.connect(self.copy_to_clipboard)
+        text_container.addWidget(self.copy_btn)
 
         # Assemble splitter
         splitter.addWidget(self.explorer_widget)
@@ -352,7 +401,11 @@ class OCRApp(QMainWindow):
 
         self.process_btn.setEnabled(True)
         self.select_area_btn.setEnabled(True)
-        self.zoom_controls_widget.setVisible(True)  # Show zoom controls when image is loaded
+
+        # Show zoom controls when image is loaded
+        self.zoom_in_btn.setVisible(True)
+        self.zoom_out_btn.setVisible(True)
+        self.zoom_reset_btn.setVisible(True)
 
     def _load_pdf(self, pdf_path):
         """Load a PDF file"""
@@ -369,7 +422,11 @@ class OCRApp(QMainWindow):
 
             self.process_btn.setEnabled(True)
             self.select_area_btn.setEnabled(True)
-            self.zoom_controls_widget.setVisible(True)  # Show zoom controls when PDF is loaded
+
+            # Show zoom controls when PDF is loaded
+            self.zoom_in_btn.setVisible(True)
+            self.zoom_out_btn.setVisible(True)
+            self.zoom_reset_btn.setVisible(True)
 
         self.status_label.setText(message)
 
@@ -407,16 +464,20 @@ class OCRApp(QMainWindow):
 
     def show_pdf_navigation(self):
         """Show PDF navigation controls"""
-        self.pdf_controls_widget.setVisible(True)
+        self.prev_page_btn.setVisible(True)
+        self.page_label.setVisible(True)
+        self.next_page_btn.setVisible(True)
 
     def hide_pdf_navigation(self):
         """Hide PDF navigation controls"""
-        self.pdf_controls_widget.setVisible(False)
+        self.prev_page_btn.setVisible(False)
+        self.page_label.setVisible(False)
+        self.next_page_btn.setVisible(False)
 
     def update_page_label(self):
         """Update page indicator text"""
         current, total = self.pdf_handler.get_page_info()
-        self.page_label.setText(f"Page {current} of {total}")
+        self.page_label.setText(str(current))
 
     def update_page_buttons(self):
         """Enable/disable prev/next based on current page"""
@@ -441,10 +502,33 @@ class OCRApp(QMainWindow):
             self.is_processing_selection = True
             self.process_btn.setEnabled(False)
             self.select_area_btn.setEnabled(False)
+            # Disable zoom and PDF pagination buttons during OCR
+            self.zoom_in_btn.setEnabled(False)
+            self.zoom_out_btn.setEnabled(False)
+            self.zoom_reset_btn.setEnabled(False)
+            self.prev_page_btn.setEnabled(False)
+            self.next_page_btn.setEnabled(False)
+            # Disable file explorer during OCR
+            self.explorer_widget.setEnabled(False)
+            # Disable text output panel and copy button during OCR
+            self.text_output.setEnabled(False)
+            self.copy_btn.setEnabled(False)
             self.extract_text(self.image_path, crop_rect)
         else:
             # Process full image path
             self.process_btn.setEnabled(False)
+            self.select_area_btn.setEnabled(False)
+            # Disable zoom and PDF pagination buttons during OCR
+            self.zoom_in_btn.setEnabled(False)
+            self.zoom_out_btn.setEnabled(False)
+            self.zoom_reset_btn.setEnabled(False)
+            self.prev_page_btn.setEnabled(False)
+            self.next_page_btn.setEnabled(False)
+            # Disable file explorer during OCR
+            self.explorer_widget.setEnabled(False)
+            # Disable text output panel and copy button during OCR
+            self.text_output.setEnabled(False)
+            self.copy_btn.setEnabled(False)
             self.extract_text(self.image_path)
 
     def extract_text(self, image_path, crop_rect=None):
@@ -507,6 +591,17 @@ class OCRApp(QMainWindow):
         self.progress_bar.setVisible(False)
         self.process_btn.setEnabled(True)
         self.select_area_btn.setEnabled(True)
+        # Re-enable zoom buttons
+        self.zoom_in_btn.setEnabled(True)
+        self.zoom_out_btn.setEnabled(True)
+        self.zoom_reset_btn.setEnabled(True)
+        # Re-enable PDF pagination buttons based on navigation state
+        self.update_page_buttons()
+        # Re-enable file explorer
+        self.explorer_widget.setEnabled(True)
+        # Re-enable text output panel and copy button
+        self.text_output.setEnabled(True)
+        self.copy_btn.setEnabled(True)
         self.is_processing_selection = False
 
     def on_ocr_error(self, error_msg):
@@ -516,6 +611,17 @@ class OCRApp(QMainWindow):
         self.progress_bar.setVisible(False)
         self.process_btn.setEnabled(True)
         self.select_area_btn.setEnabled(True)
+        # Re-enable zoom buttons
+        self.zoom_in_btn.setEnabled(True)
+        self.zoom_out_btn.setEnabled(True)
+        self.zoom_reset_btn.setEnabled(True)
+        # Re-enable PDF pagination buttons based on navigation state
+        self.update_page_buttons()
+        # Re-enable file explorer
+        self.explorer_widget.setEnabled(True)
+        # Re-enable text output panel and copy button
+        self.text_output.setEnabled(True)
+        self.copy_btn.setEnabled(True)
         self.is_processing_selection = False
 
     # Selection methods
@@ -541,6 +647,14 @@ class OCRApp(QMainWindow):
         elif has_selection:
             x, y, w, h = self.image_widget.selection_rect_original
             self.status_label.setText(f"Selection: {w}x{h}px at ({x}, {y}) - Click 'Scan' to run OCR on selection")
+
+    def on_zoom_changed(self, zoom):
+        """Handle zoom level changes"""
+        # Update tooltips to show current zoom level
+        zoom_pct = int(zoom * 100)
+        self.zoom_in_btn.setToolTip(f"Zoom In (+)\nCurrent: {zoom_pct}%")
+        self.zoom_out_btn.setToolTip(f"Zoom Out (-)\nCurrent: {zoom_pct}%")
+        self.zoom_reset_btn.setToolTip(f"Reset Zoom\nCurrent: {zoom_pct}%")
 
     # Event handlers
     def on_word_box_clicked(self, word_info):
