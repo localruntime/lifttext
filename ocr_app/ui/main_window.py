@@ -96,6 +96,8 @@ class OCRApp(QMainWindow):
 
         # Central widget and main horizontal layout
         central_widget = QWidget()
+        central_widget.setStyleSheet("QWidget { background-color: rgb(242, 242, 242) !important; }")
+        central_widget.setAutoFillBackground(True)
         self.setCentralWidget(central_widget)
         horizontal_layout = QHBoxLayout(central_widget)
         horizontal_layout.setContentsMargins(0, 0, 0, 0)
@@ -143,7 +145,7 @@ class OCRApp(QMainWindow):
         """Create the left sidebar toolbar with Search and Settings buttons"""
         sidebar = QWidget()
         sidebar.setMaximumWidth(50)
-        sidebar.setStyleSheet("QWidget { background-color: palette(window); }")
+        sidebar.setStyleSheet("QWidget { background-color: palette(window); border-right: 1px solid rgb(217, 217, 217) }")
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(5, 5, 5, 5)
         sidebar_layout.setSpacing(10)
@@ -210,10 +212,18 @@ class OCRApp(QMainWindow):
         """)
         image_panel.setAutoFillBackground(True)
         image_container = QVBoxLayout(image_panel)
-        image_container.setContentsMargins(5, 5, 5, 5)
+        image_container.setContentsMargins(5, 0, 5, 5)
 
         # Add action toolbar (Scan and Select Area buttons)
-        action_toolbar = QHBoxLayout()
+        action_toolbar_widget = QWidget()
+        action_toolbar_widget.setObjectName("action_toolbar")
+        action_toolbar_widget.setStyleSheet("""
+            QWidget#action_toolbar {
+                background-color: rgb(252, 252, 252);
+                border-bottom: 1px solid rgb(217, 217, 217);
+            }
+        """)
+        action_toolbar = QHBoxLayout(action_toolbar_widget)
         action_toolbar.setContentsMargins(0, 5, 0, 5)
         action_toolbar.setSpacing(5)
 
@@ -272,7 +282,7 @@ class OCRApp(QMainWindow):
         """)
         action_toolbar.addWidget(self.select_area_btn)
 
-        image_container.addLayout(action_toolbar)
+        image_container.addWidget(action_toolbar_widget)
 
         # Create horizontal layout for left toolbar and image viewer
         viewer_layout = QHBoxLayout()
@@ -401,6 +411,8 @@ class OCRApp(QMainWindow):
 
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
+        text_panel.setStyleSheet("QWidget { background-color: white; }")
+        text_panel.setAutoFillBackground(True)
         text_container = QVBoxLayout(text_panel)
         text_container.setContentsMargins(0, 0, 0, 0)
 
@@ -415,6 +427,7 @@ class OCRApp(QMainWindow):
                 padding-top:10px;
                 margin: 0px;
                 color: black;
+                background-color: white;
             }
             QScrollBar:vertical {
                 background: rgb(240, 240, 240);

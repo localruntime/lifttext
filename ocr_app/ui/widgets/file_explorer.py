@@ -18,6 +18,16 @@ class FileExplorerWidget(QWidget):
 
     def init_ui(self):
         """Initialize the file explorer UI"""
+        # Set background color to white using both palette and stylesheet
+        from PySide6.QtGui import QPalette, QColor
+        palette = self.palette()
+        palette.setColor(QPalette.Window, QColor(255, 255, 255))
+        palette.setColor(QPalette.Base, QColor(255, 255, 255))
+        self.setPalette(palette)
+        self.setAutoFillBackground(True)
+        # Also set stylesheet to ensure white background
+        self.setStyleSheet("FileExplorerWidget { background-color: white !important; }")
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -54,6 +64,7 @@ class FileExplorerWidget(QWidget):
         self.tree_view.setStyleSheet(f"""
             QTreeView {{
                 font-size: {font_size}pt !important;
+                background-color: white !important;
             }}
             QTreeView::item {{
                 padding: 0px 2px !important;
@@ -61,9 +72,18 @@ class FileExplorerWidget(QWidget):
                 height: 20px !important;
                 min-height: 20px !important;
                 max-height: 20px !important;
+                background-color: white !important;
+            }}
+            QTreeView::item:selected {{
+                background-color: rgb(0, 120, 215) !important;
+                color: white !important;
+            }}
+            QTreeView::item:hover {{
+                background-color: rgb(229, 243, 255) !important;
             }}
             QTreeView::branch {{
                 width: 10px !important;
+                background-color: white !important;
             }}
             QScrollBar:vertical {{
                 background: rgb(240, 240, 240);
