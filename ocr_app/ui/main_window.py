@@ -419,6 +419,7 @@ class OCRApp(QMainWindow):
 
         self.copy_btn = QPushButton("Copy to Clipboard")
         self.copy_btn.clicked.connect(self.copy_to_clipboard)
+        self.copy_btn.setVisible(False)  # Initially hidden until scan is done
         text_container.addWidget(self.copy_btn)
 
         # Assemble splitter
@@ -497,6 +498,7 @@ class OCRApp(QMainWindow):
 
         self.text_output.clear()
         self.text_output.setPlaceholderText("Click 'Scan' to extract text...")
+        self.copy_btn.setVisible(False)  # Hide copy button until scan is done
 
         # Show action buttons and hide placeholder
         self.no_file_label.setVisible(False)
@@ -522,6 +524,7 @@ class OCRApp(QMainWindow):
 
             self.text_output.clear()
             self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
+            self.copy_btn.setVisible(False)  # Hide copy button until scan is done
 
             # Show action buttons and hide placeholder
             self.no_file_label.setVisible(False)
@@ -557,6 +560,7 @@ class OCRApp(QMainWindow):
                 self.image_widget.set_image(pixmap)
             self.text_output.clear()
             self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
+            self.copy_btn.setVisible(False)  # Hide copy button until new scan is done
 
     def navigate_to_next_page(self):
         """Navigate to next PDF page"""
@@ -568,6 +572,7 @@ class OCRApp(QMainWindow):
                 self.image_widget.set_image(pixmap)
             self.text_output.clear()
             self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
+            self.copy_btn.setVisible(False)  # Hide copy button until new scan is done
 
     def show_pdf_navigation(self):
         """Show PDF navigation controls"""
@@ -706,9 +711,10 @@ class OCRApp(QMainWindow):
         self.update_page_buttons()
         # Re-enable file explorer
         self.explorer_widget.setEnabled(True)
-        # Re-enable text output panel and copy button
+        # Re-enable text output panel and show copy button
         self.text_output.setEnabled(True)
         self.copy_btn.setEnabled(True)
+        self.copy_btn.setVisible(True)  # Show copy button after successful scan
         self.is_processing_selection = False
 
     def on_ocr_error(self, error_msg):
