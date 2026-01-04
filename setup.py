@@ -1,5 +1,5 @@
 """
-py2app setup file for PaddleOCR macOS application
+py2app setup file for LiftText macOS application
 """
 from setuptools import setup
 from pathlib import Path
@@ -45,9 +45,9 @@ OPTIONS = {
     'argv_emulation': False,
     'iconfile': None,
     'plist': {
-        'CFBundleName': 'PaddleOCR',
-        'CFBundleDisplayName': 'PaddleOCR Image Text Extractor',
-        'CFBundleIdentifier': 'com.paddleocr.app',
+        'CFBundleName': 'LiftText',
+        'CFBundleDisplayName': 'LiftText Image Text Extractor',
+        'CFBundleIdentifier': 'com.lifttext.app',
         'CFBundleVersion': '1.0.0',
         'CFBundleShortVersionString': '1.0.0',
         'NSHighResolutionCapable': True,
@@ -93,7 +93,7 @@ OPTIONS = {
 }
 
 setup(
-    name='PaddleOCR',
+    name='LiftText',
     app=APP,
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},

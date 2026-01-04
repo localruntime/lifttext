@@ -27,7 +27,7 @@
       "Bash(echo:*)",
       "Bash(pyinstaller:*)",
       "Bash(timeout:*)",
-      "Bash(dist/PaddleOCR.app/Contents/MacOS/PaddleOCR)",
+      "Bash(dist/LiftText.app/Contents/MacOS/LiftText)",
       "Bash(open:*)",
       "Bash(pkill:*)",
       "Bash(hdiutil create:*)",

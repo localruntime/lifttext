@@ -1,6 +1,6 @@
-# PaddleOCR Image Text Extractor
+# LiftText Image Text Extractor
 
-A PySide6 application that allows users to upload images and extract text using PaddleOCR.
+A PySide6 application for extracting text from images using PaddleOCR technology.
 
 ## Requirements
 
@@ -86,21 +86,21 @@ python main.py
 ```cmd
 source venv/bin/activate
 python setup.py py2app
-open dist/PaddleOCR.app
+open dist/LiftText.app
 ```
 
-### 
+###
   Creating a Distributable DMG
 
   Once the app is built, create a disk image for distribution:
 
   # Create a DMG file
-  hdiutil create -volname "PaddleOCR" \
-    -srcfolder dist/PaddleOCR.app \
+  hdiutil create -volname "LiftText" \
+    -srcfolder dist/LiftText.app \
     -ov -format UDZO \
-    PaddleOCR-1.0.0.dmg
+    LiftText-1.0.0.dmg
 
-  This creates PaddleOCR-1.0.0.dmg that users can download, open, and drag to Applications.
+  This creates LiftText-1.0.0.dmg that users can download, open, and drag to Applications.
 
 ## Features
 

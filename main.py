@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PaddleOCR Image Text Extractor - Entry Point
+LiftText Image Text Extractor - Entry Point
 
 This file serves as the entry point for the application.
 The main application code is in the ocr_app package.

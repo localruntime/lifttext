@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A PySide6 desktop application for extracting text from images using PaddleOCR v3. The app displays images with interactive word bounding boxes and allows users to click on detected text regions.
+LiftText is a PySide6 desktop application for extracting text from images using PaddleOCR v3. The app displays images with interactive word bounding boxes and allows users to click on detected text regions.
 
 ## Environment Setup
 

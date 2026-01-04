@@ -1,4 +1,4 @@
-"""Main application window for PaddleOCR Image Text Extractor"""
+"""Main application window for LiftText Image Text Extractor"""
 import sys
 import os
 from PySide6.QtWidgets import (
@@ -36,7 +36,7 @@ class OCRApp(QMainWindow):
         self.is_processing_selection = False
 
         # Initialize QSettings for persistence
-        self.settings = QSettings('PaddleOCR', 'ImageTextExtractor')
+        self.settings = QSettings('LiftText', 'ImageTextExtractor')
 
         # Load settings
         self._load_settings()
@@ -69,6 +69,27 @@ class OCRApp(QMainWindow):
         """Initialize the user interface"""
         self.setWindowTitle("LiftText")
         self.setGeometry(100, 100, 1000, 700)
+
+        # Apply global button styling
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: rgb(8, 134, 71) !important;
+                color: white !important;
+                border: 1px solid rgb(237, 237, 237) !important;
+            }
+            QPushButton:hover {
+                background-color: rgb(6, 110, 58) !important;
+                border: 1px solid rgb(150, 150, 150) !important;
+            }
+            QPushButton:pressed {
+                background-color: rgb(5, 90, 47) !important;
+                border: 1px solid rgb(120, 120, 120) !important;
+            }
+            QPushButton:disabled {
+                background-color: rgb(150, 150, 150) !important;
+                color: rgb(200, 200, 200) !important;
+            }
+        """)
 
         # Create menu bar
         self._create_menu_bar()
@@ -170,7 +191,21 @@ class OCRApp(QMainWindow):
                 background-color: rgb(252, 252, 252);
             }
             QPushButton {
-                background-color: palette(button);
+                background-color: rgb(8, 134, 71);
+                color: white;
+                border: 1px solid rgb(237, 237, 237);
+            }
+            QPushButton:hover {
+                background-color: rgb(6, 110, 58);
+                border: 1px solid rgb(150, 150, 150);
+            }
+            QPushButton:pressed {
+                background-color: rgb(5, 90, 47);
+                border: 1px solid rgb(120, 120, 120);
+            }
+            QPushButton:disabled {
+                background-color: rgb(150, 150, 150);
+                color: rgb(200, 200, 200);
             }
         """)
         image_panel.setAutoFillBackground(True)
@@ -182,11 +217,24 @@ class OCRApp(QMainWindow):
         action_toolbar.setContentsMargins(0, 5, 0, 5)
         action_toolbar.setSpacing(5)
 
+        # Placeholder label (shown when no file is loaded)
+        self.no_file_label = QLabel("Select file to scan")
+        self.no_file_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.no_file_label.setStyleSheet("""
+            QLabel {
+                color: rgb(150, 150, 150);
+                font-size: 14px;
+                padding: 10px;
+            }
+        """)
+        action_toolbar.addWidget(self.no_file_label)
+
         # Scan button (smart - handles both full image and selection)
         self.process_btn = QPushButton("Scan")
         self.process_btn.setToolTip("Scan the full image, or the selected area if a selection is active")
         self.process_btn.clicked.connect(self.process)
         self.process_btn.setEnabled(False)
+        self.process_btn.setVisible(False)  # Initially hidden
         action_toolbar.addWidget(self.process_btn)
 
         action_toolbar.addStretch()  # Push Select Area button to the right
@@ -200,6 +248,26 @@ class OCRApp(QMainWindow):
         self.select_area_btn.setCheckable(True)
         self.select_area_btn.clicked.connect(self.toggle_selection_mode)
         self.select_area_btn.setEnabled(False)
+        self.select_area_btn.setVisible(False)  # Initially hidden
+        # Apply grey styling to Select Area button (icon-only button)
+        self.select_area_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid rgb(237, 237, 237);
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.05);
+                border: 1px solid rgb(150, 150, 150);
+            }
+            QPushButton:pressed, QPushButton:checked {
+                background-color: rgba(0, 0, 0, 0.1);
+                border: 1px solid rgb(120, 120, 120);
+            }
+            QPushButton:disabled {
+                background-color: transparent;
+                border: 1px solid rgb(220, 220, 220);
+            }
+        """)
         action_toolbar.addWidget(self.select_area_btn)
 
         image_container.addLayout(action_toolbar)
@@ -430,7 +498,11 @@ class OCRApp(QMainWindow):
         self.text_output.clear()
         self.text_output.setPlaceholderText("Click 'Scan' to extract text...")
 
+        # Show action buttons and hide placeholder
+        self.no_file_label.setVisible(False)
+        self.process_btn.setVisible(True)
         self.process_btn.setEnabled(True)
+        self.select_area_btn.setVisible(True)
         self.select_area_btn.setEnabled(True)
 
         # Show zoom controls when image is loaded
@@ -451,7 +523,11 @@ class OCRApp(QMainWindow):
             self.text_output.clear()
             self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
 
+            # Show action buttons and hide placeholder
+            self.no_file_label.setVisible(False)
+            self.process_btn.setVisible(True)
             self.process_btn.setEnabled(True)
+            self.select_area_btn.setVisible(True)
             self.select_area_btn.setEnabled(True)
 
             # Show zoom controls when PDF is loaded
@@ -766,13 +842,37 @@ def main():
     # Apply Material Design theme
     try:
         from qt_material import apply_stylesheet
-        settings = QSettings('PaddleOCR', 'ImageTextExtractor')
+        settings = QSettings('LiftText', 'ImageTextExtractor')
         theme = settings.value('ui/theme', 'light_blue.xml')
         apply_stylesheet(app, theme=theme)
     except ImportError:
         print("Warning: qt-material not installed. Using default Qt styling.")
     except Exception as e:
         print(f"Warning: Could not apply theme: {e}")
+
+    # Apply custom button styling after qt_material theme
+    custom_button_style = """
+        QPushButton {
+            background-color: rgb(8, 134, 71) !important;
+            color: white !important;
+            border: 1px solid rgb(237, 237, 237) !important;
+        }
+        QPushButton:hover {
+            background-color: rgb(6, 110, 58) !important;
+            border: 1px solid rgb(150, 150, 150) !important;
+        }
+        QPushButton:pressed {
+            background-color: rgb(5, 90, 47) !important;
+            border: 1px solid rgb(120, 120, 120) !important;
+        }
+        QPushButton:disabled {
+            background-color: rgb(150, 150, 150) !important;
+            color: rgb(200, 200, 200) !important;
+        }
+    """
+    # Append to existing stylesheet
+    existing_style = app.styleSheet()
+    app.setStyleSheet(existing_style + custom_button_style)
 
     window = OCRApp()
     window.show()

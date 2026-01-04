@@ -192,7 +192,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PaddleOCR',
+    name='LiftText',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -213,24 +213,24 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='PaddleOCR',
+    name='LiftText',
 )
 
 app = BUNDLE(
     coll,
-    name='PaddleOCR.app',
+    name='LiftText.app',
     icon=None,  # Use default macOS icon
-    bundle_identifier='com.paddleocr.imagetextextractor',
+    bundle_identifier='com.lifttext.imagetextextractor',
     version='1.0.0',
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSHighResolutionCapable': 'True',
-        'CFBundleName': 'PaddleOCR',
-        'CFBundleDisplayName': 'PaddleOCR Image Text Extractor',
+        'CFBundleName': 'LiftText',
+        'CFBundleDisplayName': 'LiftText Image Text Extractor',
         'CFBundleShortVersionString': '1.0.0',
         'CFBundleVersion': '1.0.0',
-        'CFBundleIdentifier': 'com.paddleocr.imagetextextractor',
-        'NSHumanReadableCopyright': 'PaddleOCR Desktop App',
+        'CFBundleIdentifier': 'com.lifttext.imagetextextractor',
+        'NSHumanReadableCopyright': 'LiftText Desktop App',
         'LSMinimumSystemVersion': '10.13',
         'NSRequiresAquaSystemAppearance': False,  # Support dark mode
     },
