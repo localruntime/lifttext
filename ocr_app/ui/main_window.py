@@ -215,31 +215,17 @@ class OCRApp(QMainWindow):
         image_container.setContentsMargins(5, 0, 5, 5)
 
         # Add action toolbar (Scan and Select Area buttons)
-        action_toolbar_widget = QWidget()
-        action_toolbar_widget.setObjectName("action_toolbar")
-        action_toolbar_widget.setStyleSheet("""
+        self.action_toolbar_widget = QWidget()
+        self.action_toolbar_widget.setObjectName("action_toolbar")
+        # Initially no border when no file is loaded
+        self.action_toolbar_widget.setStyleSheet("""
             QWidget#action_toolbar {
                 background-color: rgb(252, 252, 252);
-                border-bottom: 1px solid rgb(217, 217, 217);
             }
         """)
-        action_toolbar = QHBoxLayout(action_toolbar_widget)
+        action_toolbar = QHBoxLayout(self.action_toolbar_widget)
         action_toolbar.setContentsMargins(0, 5, 0, 5)
         action_toolbar.setSpacing(5)
-
-        # Placeholder label (shown when no file is loaded)
-        self.no_file_label = QLabel("Select file to scan")
-        self.no_file_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        self.no_file_label.setStyleSheet("""
-            QLabel {
-                color: rgb(150, 150, 150);
-                padding-left: 3px;
-                padding-top: 8px;
-                padding-right: 8px;
-                padding-bottom: 8px;
-            }
-        """)
-        action_toolbar.addWidget(self.no_file_label)
 
         # Scan button (smart - handles both full image and selection)
         self.process_btn = QPushButton("Scan")
@@ -282,7 +268,7 @@ class OCRApp(QMainWindow):
         """)
         action_toolbar.addWidget(self.select_area_btn)
 
-        image_container.addWidget(action_toolbar_widget)
+        image_container.addWidget(self.action_toolbar_widget)
 
         # Create horizontal layout for left toolbar and image viewer
         viewer_layout = QHBoxLayout()
@@ -380,13 +366,17 @@ class OCRApp(QMainWindow):
         self.image_widget = ImageWithBoxes()
         self.image_widget.setAlignment(Qt.AlignCenter)
         self.image_widget.setMinimumSize(400, 400)
-        # Set background color without border
+        # Set background color without border and add placeholder text styling
         self.image_widget.setStyleSheet("""
             ImageWithBoxes {
                 border: none;
                 background-color: rgb(252, 252, 252) !important;
+                color: rgb(150, 150, 150);
+                font-size: 14px;
             }
         """)
+        # Set initial placeholder text (centered)
+        self.image_widget.setText("Select file to scan")
         self.image_widget.word_clicked.connect(self.on_word_box_clicked)
         self.image_widget.selection_changed.connect(self.on_selection_changed)
         self.image_widget.zoom_changed.connect(self.on_zoom_changed)
@@ -411,7 +401,28 @@ class OCRApp(QMainWindow):
 
         # RIGHT PANEL: Text Output
         text_panel = QWidget()
-        text_panel.setStyleSheet("QWidget { background-color: white; }")
+        text_panel.setStyleSheet("""
+            QWidget {
+                background-color: white;
+            }
+            QPushButton {
+                background-color: rgb(8, 134, 71);
+                color: white;
+                border: 1px solid rgb(237, 237, 237);
+            }
+            QPushButton:hover {
+                background-color: rgb(6, 110, 58);
+                border: 1px solid rgb(150, 150, 150);
+            }
+            QPushButton:pressed {
+                background-color: rgb(5, 90, 47);
+                border: 1px solid rgb(120, 120, 120);
+            }
+            QPushButton:disabled {
+                background-color: rgb(150, 150, 150);
+                color: rgb(200, 200, 200);
+            }
+        """)
         text_panel.setAutoFillBackground(True)
         text_container = QVBoxLayout(text_panel)
         text_container.setContentsMargins(0, 0, 0, 0)
@@ -549,12 +560,19 @@ class OCRApp(QMainWindow):
         self.text_output.setPlaceholderText("Click 'Scan' to extract text...")
         self.copy_btn.setVisible(False)  # Hide copy button until scan is done
 
-        # Show action buttons and hide placeholder
-        self.no_file_label.setVisible(False)
+        # Show action buttons (placeholder text cleared in set_image)
         self.process_btn.setVisible(True)
         self.process_btn.setEnabled(True)
         self.select_area_btn.setVisible(True)
         self.select_area_btn.setEnabled(True)
+
+        # Show toolbar border when file is loaded
+        self.action_toolbar_widget.setStyleSheet("""
+            QWidget#action_toolbar {
+                background-color: rgb(252, 252, 252);
+                border-bottom: 1px solid rgb(217, 217, 217);
+            }
+        """)
 
         # Show zoom controls when image is loaded
         self.zoom_in_btn.setVisible(True)
@@ -575,12 +593,19 @@ class OCRApp(QMainWindow):
             self.text_output.setPlaceholderText("Click 'Scan' to extract text from this page...")
             self.copy_btn.setVisible(False)  # Hide copy button until scan is done
 
-            # Show action buttons and hide placeholder
-            self.no_file_label.setVisible(False)
+            # Show action buttons (placeholder text cleared in set_image)
             self.process_btn.setVisible(True)
             self.process_btn.setEnabled(True)
             self.select_area_btn.setVisible(True)
             self.select_area_btn.setEnabled(True)
+
+            # Show toolbar border when file is loaded
+            self.action_toolbar_widget.setStyleSheet("""
+                QWidget#action_toolbar {
+                    background-color: rgb(252, 252, 252);
+                    border-bottom: 1px solid rgb(217, 217, 217);
+                }
+            """)
 
             # Show zoom controls when PDF is loaded
             self.zoom_in_btn.setVisible(True)

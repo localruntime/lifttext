@@ -41,6 +41,7 @@ class ImageWithBoxes(QLabel, ZoomPanMixin, SelectionMixin, RenderingMixin):
         self.zoom_level = 1.0  # Reset zoom when loading new image
         self.pan_offset_x = 0  # Reset pan when loading new image
         self.pan_offset_y = 0
+        self.setText("")  # Clear placeholder text when image is loaded
         self.update_display()
 
     def set_word_data(self, words):

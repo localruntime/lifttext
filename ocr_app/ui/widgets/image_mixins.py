@@ -348,6 +348,11 @@ class RenderingMixin:
     def render_image_and_boxes(self, painter):
         """Render the scaled image and word boxes"""
         if not hasattr(self, 'scaled_pixmap') or not self.scaled_pixmap:
+            # Draw centered placeholder text when no image is loaded
+            if hasattr(self, 'text') and self.text():
+                painter.setPen(QColor(150, 150, 150))
+                painter.setFont(QFont("Arial", 14))
+                painter.drawText(self.rect(), Qt.AlignCenter, self.text())
             return
 
         # Draw the scaled image centered with pan offset
