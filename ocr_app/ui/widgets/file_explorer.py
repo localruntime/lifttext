@@ -65,6 +65,38 @@ class FileExplorerWidget(QWidget):
             QTreeView::branch {{
                 width: 10px !important;
             }}
+            QScrollBar:vertical {{
+                background: rgb(240, 240, 240);
+                width: 8px;
+                border: none;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgb(180, 180, 180);
+                min-height: 20px;
+                border-radius: 2px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgb(150, 150, 150);
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar:horizontal {{
+                background: rgb(240, 240, 240);
+                height: 8px;
+                border: none;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: rgb(180, 180, 180);
+                min-width: 20px;
+                border-radius: 2px;
+            }}
+            QScrollBar::handle:horizontal:hover {{
+                background: rgb(150, 150, 150);
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0px;
+            }}
         """)
         # Set smaller icon size
         self.tree_view.setIconSize(QSize(12, 12))

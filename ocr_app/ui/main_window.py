@@ -219,12 +219,14 @@ class OCRApp(QMainWindow):
 
         # Placeholder label (shown when no file is loaded)
         self.no_file_label = QLabel("Select file to scan")
-        self.no_file_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.no_file_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.no_file_label.setStyleSheet("""
             QLabel {
                 color: rgb(150, 150, 150);
-                font-size: 14px;
-                padding: 10px;
+                padding-left: 3px;
+                padding-top: 8px;
+                padding-right: 8px;
+                padding-bottom: 8px;
             }
         """)
         action_toolbar.addWidget(self.no_file_label)
@@ -410,7 +412,41 @@ class OCRApp(QMainWindow):
             QTextEdit {
                 border: none;
                 padding: 0px;
+                padding-top:10px;
                 margin: 0px;
+                color: black;
+            }
+            QScrollBar:vertical {
+                background: rgb(240, 240, 240);
+                width: 8px;
+                border: none;
+            }
+            QScrollBar::handle:vertical {
+                background: rgb(180, 180, 180);
+                min-height: 20px;
+                border-radius: 2px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgb(150, 150, 150);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar:horizontal {
+                background: rgb(240, 240, 240);
+                height: 8px;
+                border: none;
+            }
+            QScrollBar::handle:horizontal {
+                background: rgb(180, 180, 180);
+                min-width: 20px;
+                border-radius: 2px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background: rgb(150, 150, 150);
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
             }
         """)
         # Add padding around text content only (not affecting scrollbar)
