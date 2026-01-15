@@ -77,6 +77,7 @@ OPTIONS = {
         'qt_material',
         'qt_material_icons',
         'fitz',
+        'ruamel.yaml',
     ],
     'includes': [
         'scipy._lib._ccallback',
@@ -111,7 +112,6 @@ OPTIONS = {
         'onnx',
         'onnxruntime',
         # Other heavy deps
-        'ruamel',
         'black',
         'sphinx',
         'pytest',
