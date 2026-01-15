@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LiftText is a PySide6 desktop application for extracting text from images using PaddleOCR v3. The app displays images with interactive word bounding boxes and allows users to click on detected text regions.
+LiftText is a PySide6 desktop application for extracting text from images. The app uses PaddleOCR v3 as its OCR engine, displays images with interactive word bounding boxes, and allows users to click on detected text regions.
 
 ## Environment Setup
 
@@ -20,7 +20,7 @@ venv\Scripts\activate.bat  # Windows
 pip install -r requirements.txt
 ```
 
-First-time initialization will download PaddleOCR models (~100MB) to `~/.paddlex/official_models/`.
+First-time initialization will download OCR models (~100MB) to `~/.paddlex/official_models/`.
 
 ## Running the Application
 
@@ -69,7 +69,7 @@ ocr_app/
    - Key method: `paintEvent()` draws boxes using scaled coordinates with `scale_factor` and offsets
 
 2. **`OCRWorker`** (ocr_app/core/ocr_worker.py): Background QThread for OCR processing
-   - Initializes PaddleOCR v3 with mobile models for speed
+   - Initializes the OCR engine (PaddleOCR v3) with mobile models for speed
    - Uses `predict()` method (not deprecated `ocr()`)
    - Emits signals: `words_detected`, `finished`, `error`, `progress`, `preprocessed_image`
    - Handles both dictionary and list result formats from PaddleOCR
@@ -123,7 +123,7 @@ The code handles both v2 list format `[[bbox, (text, score)], ...]` and v3 dicti
 ## Testing
 
 ```bash
-# Test OCR directly (uses PaddleOCR v2 API - outdated)
+# Test OCR directly (uses legacy v2 API - outdated)
 python test_ocr_direct.py
 
 # Create test image
@@ -168,7 +168,7 @@ Each mixin is responsible for a specific concern:
 
 ## Key Implementation Notes
 
-### When modifying PaddleOCR initialization:
+### When modifying OCR engine initialization:
 - Always use mobile models for performance: `text_detection_model_name='PP-OCRv4_mobile_det'`
 - Disable heavy preprocessing for speed
 - Use `predict()` instead of deprecated `ocr()`

@@ -23,9 +23,9 @@ class OCRWorker(QThread):
 
     def run(self):
         try:
-            # Initialize PaddleOCR v3 with mobile/slim models for fast performance
+            # Initialize OCR engine (PaddleOCR v3) with mobile/slim models for fast performance
             self.progress_value.emit(10)
-            self.progress.emit("Initializing PaddleOCR v3 (this may take a while on first run)...")
+            self.progress.emit("Initializing OCR engine (this may take a while on first run)...")
             self.ocr = PaddleOCR(
                 # Use mobile/slim models for faster performance
                 text_detection_model_name=self.det_model,      # Configurable detection model

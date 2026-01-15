@@ -17,7 +17,7 @@ def get_resource_path(relative_path):
 
 def setup_bundled_models():
     """
-    Configure PaddleOCR to use bundled models when running as .app bundle.
+    Configure OCR engine to use bundled models when running as .app bundle.
     MUST be called BEFORE importing paddleocr module.
     """
     if hasattr(sys, '_MEIPASS'):
@@ -31,6 +31,6 @@ def setup_bundled_models():
             return bundled_models_dir
         else:
             print(f"WARNING: Bundled models not found at {bundled_models_dir}")
-            print("PaddleOCR will try to download models from internet...")
+            print("LiftText will try to download models from internet...")
 
     return None

@@ -60,7 +60,7 @@ __pycache__/
 *.so
 .Python
 
-# PaddleOCR
+# OCR models
 inference/
 *.pdparams
 *.pdiparams

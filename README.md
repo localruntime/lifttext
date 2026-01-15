@@ -1,6 +1,6 @@
 # LiftText Image Text Extractor
 
-A PySide6 application for extracting text from images using PaddleOCR technology.
+A PySide6 desktop application for extracting text from images.
 
 ## Requirements
 
@@ -106,8 +106,8 @@ open dist/LiftText.app
 
 - Upload images (PNG, JPG, JPEG, BMP)
 - Display uploaded images with automatic scaling
-- Extract text using PaddleOCR (Slim model)
+- Extract text using OCR (slim models for speed)
 - View extracted text in a text area
 - Non-blocking OCR processing with threading
 - Clean and intuitive user interface
-- Lightweight and fast - uses PaddleOCR's slim model for minimal download size and quick processing
+- Lightweight and fast - uses slim OCR models for minimal download size and quick processing
