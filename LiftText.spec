@@ -8,11 +8,14 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-# Collect all paddlex config files
-paddlex_datas = collect_data_files('paddlex', includes=['**/*.yml', '**/*.yaml', '**/*.json'])
+# Collect all paddlex data files (configs, version, etc.)
+paddlex_datas = collect_data_files('paddlex')
+
+# Collect all paddleocr data files
+paddleocr_datas = collect_data_files('paddleocr')
 
 # Collect qt_material themes
-qt_material_datas = collect_data_files('qt_material', includes=['**/*'])
+qt_material_datas = collect_data_files('qt_material')
 
 # Hidden imports for packages that PyInstaller might miss
 hidden_imports = [
@@ -51,7 +54,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=paddlex_datas + qt_material_datas,
+    datas=paddlex_datas + paddleocr_datas + qt_material_datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
