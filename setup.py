@@ -126,9 +126,8 @@ OPTIONS = {
             str(qt_material_root / 'resources') if qt_material_root else None,
         ] if r is not None
     ],
-    'semi_standalone': True,  # Don't modify bundled libraries (avoids permission errors)
+    'semi_standalone': False,  # Bundle Python for standalone distribution
     'site_packages': True,
-    'no_chdir': True,  # Prevent working directory changes
 }
 
 setup(
