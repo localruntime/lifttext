@@ -17,6 +17,9 @@ paddleocr_datas = collect_data_files('paddleocr')
 # Collect qt_material themes
 qt_material_datas = collect_data_files('qt_material')
 
+# Collect qt_material_icons resources
+qt_material_icons_datas = collect_data_files('qt_material_icons')
+
 # Hidden imports for packages that PyInstaller might miss
 hidden_imports = [
     # PaddleOCR/PaddleX
@@ -46,15 +49,16 @@ hidden_imports = [
     'certifi',
 ]
 
-# Add all paddlex submodules
+# Add all submodules for packages with dynamic imports
 hidden_imports += collect_submodules('paddlex')
 hidden_imports += collect_submodules('paddleocr')
+hidden_imports += collect_submodules('qt_material_icons')
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=paddlex_datas + paddleocr_datas + qt_material_datas,
+    datas=paddlex_datas + paddleocr_datas + qt_material_datas + qt_material_icons_datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
