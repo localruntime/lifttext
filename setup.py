@@ -77,7 +77,7 @@ OPTIONS = {
         'qt_material',
         'qt_material_icons',
         'fitz',
-        'ruamel.yaml',
+        'ruamel',
     ],
     'includes': [
         'scipy._lib._ccallback',
@@ -85,6 +85,7 @@ OPTIONS = {
         'shapely._geos',
         'shapely._geometry_helpers',
         'setuptools.msvc',
+        'ruamel.yaml',
     ],
     'excludes': [
         # Build tools
