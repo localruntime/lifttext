@@ -47,6 +47,7 @@ hidden_imports = [
     'tqdm',
     'requests',
     'certifi',
+    'qt_material_icons.resources', 
 ]
 
 # Add all submodules for packages with dynamic imports
