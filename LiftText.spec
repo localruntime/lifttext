@@ -78,6 +78,9 @@ a = Analysis(
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
+    module_collection_mode={
+        'qt_material_icons': 'pyz+py',
+    },
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
