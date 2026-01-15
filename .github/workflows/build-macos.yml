@@ -58,6 +58,19 @@ jobs:
             exit 1
           }
 
+          # Verify build succeeded
+          echo "=== Contents of dist/ ==="
+          ls -la dist/
+
+          if [ ! -d "dist/LiftText.app" ]; then
+            echo "ERROR: LiftText.app was not created!"
+            echo "=== Last 200 lines of build log ==="
+            tail -200 build.log
+            exit 1
+          fi
+
+          echo "Build successful: dist/LiftText.app exists"
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
