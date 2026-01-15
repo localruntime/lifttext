@@ -3,6 +3,7 @@ py2app setup file for LiftText macOS application
 """
 from setuptools import setup
 from pathlib import Path
+import subprocess
 import os
 import sys
 
@@ -26,14 +27,24 @@ for model_name in default_models:
     if model_path.exists():
         MODEL_DATA.append(str(model_path))
 
-# Get paddlex configs
-import paddlex
-paddlex_root = Path(paddlex.__file__).parent
-configs_dir = paddlex_root / 'configs'
+# Get package paths without importing (avoids loading huge dependency trees)
+def get_package_path(package_name):
+    """Get package path using subprocess to avoid import side effects."""
+    try:
+        result = subprocess.run(
+            [sys.executable, '-c', f'import {package_name}; print({package_name}.__file__)'],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip()).parent
+    except Exception as e:
+        print(f"Warning: Could not find {package_name}: {e}")
+    return None
 
-# Get qt-material resources
-import qt_material
-qt_material_root = Path(qt_material.__file__).parent
+paddlex_root = get_package_path('paddlex')
+configs_dir = paddlex_root / 'configs' if paddlex_root else None
+
+qt_material_root = get_package_path('qt_material')
 
 APP = ['main.py']
 DATA_FILES = [
@@ -75,17 +86,45 @@ OPTIONS = {
         'setuptools.msvc',
     ],
     'excludes': [
+        # Build tools
         'PyInstaller',
-        'matplotlib',
+        'nuitka',
+        'cx_Freeze',
+        # GUI frameworks we don't use
         'tkinter',
+        'matplotlib',
+        'wx',
+        'PyQt5',
+        'PyQt6',
+        # Jupyter/notebook
         'jupyter',
         'notebook',
+        'ipython',
+        'ipykernel',
+        'IPython',
+        # Heavy ML libraries not needed at runtime
+        'modelscope',
+        'transformers',
+        'torch',
+        'tensorflow',
+        'keras',
+        'onnx',
+        'onnxruntime',
+        # Other heavy deps
         'ruamel',
+        'black',
+        'sphinx',
+        'pytest',
+        'setuptools',
+        'pip',
+        'wheel',
     ],
     'resources': [
-        str(configs_dir),
-        str(qt_material_root / 'themes'),
-        str(qt_material_root / 'resources'),
+        r for r in [
+            str(configs_dir) if configs_dir else None,
+            str(qt_material_root / 'themes') if qt_material_root else None,
+            str(qt_material_root / 'resources') if qt_material_root else None,
+        ] if r is not None
     ],
     'semi_standalone': True,  # Don't modify bundled libraries (avoids permission errors)
     'site_packages': True,

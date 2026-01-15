@@ -24,9 +24,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install py2app
+          pip install py2app scipy scikit-learn
 
       - name: Download OCR models
+        env:
+          DISABLE_MODEL_SOURCE_CHECK: "True"
         run: |
           python -c "
           from paddlex import create_pipeline
@@ -35,8 +37,21 @@ jobs:
           "
 
       - name: Build app with py2app
+        env:
+          DISABLE_MODEL_SOURCE_CHECK: "True"
         run: |
-          python setup.py py2app
+          python setup.py py2app 2>&1 | tee build.log || {
+            echo "=== Build failed. Last 100 lines of log ==="
+            tail -100 build.log
+            exit 1
+          }
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Create DMG
         run: |
