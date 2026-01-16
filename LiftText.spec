@@ -27,6 +27,7 @@ hidden_imports = [
     'paddlex',
     'paddle',
     # Image processing
+    'matplotlib',
     'PIL',
     'cv2',
     'numpy',
@@ -47,7 +48,27 @@ hidden_imports = [
     'tqdm',
     'requests',
     'certifi',
-    'qt_material_icons.resources', 
+    # PaddleX optional deps (imported dynamically)
+    'chinese_calendar',
+    'holidays',
+    'statsmodels',
+    'statsmodels.tsa',
+    'statsmodels.tsa.stattools',
+    'soundfile',
+    'librosa',
+    'qt_material_icons.resources',
+    'qt_material_icons.resources.icons_outlined_20',
+    'qt_material_icons.resources.icons_outlined_24',
+    'qt_material_icons.resources.icons_outlined_40',
+    'qt_material_icons.resources.icons_outlined_48',
+    'qt_material_icons.resources.icons_rounded_20',
+    'qt_material_icons.resources.icons_rounded_24',
+    'qt_material_icons.resources.icons_rounded_40',
+    'qt_material_icons.resources.icons_rounded_48',
+    'qt_material_icons.resources.icons_sharp_20',
+    'qt_material_icons.resources.icons_sharp_24',
+    'qt_material_icons.resources.icons_sharp_40',
+    'qt_material_icons.resources.icons_sharp_48',
 ]
 
 # Add all submodules for packages with dynamic imports
@@ -63,9 +84,8 @@ a = Analysis(
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['hook-paddlex-runtime.py'],
     excludes=[
-        'matplotlib',
         'tkinter',
         'jupyter',
         'notebook',

@@ -32,7 +32,8 @@
       "Bash(pkill:*)",
       "Bash(hdiutil create:*)",
       "Bash(tree:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(pip freeze:*)"
     ],
     "deny": [],
     "ask": []

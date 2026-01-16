@@ -85,7 +85,7 @@ python main.py
 
 ```cmd
 source venv/bin/activate
-python setup.py py2app
+pyinstaller LiftText.spec
 open dist/LiftText.app
 ```
 
