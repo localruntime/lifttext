@@ -33,7 +33,9 @@
       "Bash(hdiutil create:*)",
       "Bash(tree:*)",
       "Bash(wc:*)",
-      "Bash(pip freeze:*)"
+      "Bash(pip freeze:*)",
+      "Bash(/Applications/LiftText.app/Contents/MacOS/LiftText)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

@@ -5,3 +5,15 @@ Pillow>=10.0.0
 qt-material>=2.14
 qt-material-icons>=0.4.0
 PyMuPDF>=1.23.0
+
+# PaddleX runtime dependencies
+matplotlib>=3.7.0
+scipy>=1.10.0
+scikit-learn>=1.2.0
+scikit-image>=0.20.0
+chinese_calendar>=1.8.0
+holidays>=0.25
+statsmodels>=0.14.0
+librosa>=0.10.0
+shapely>=2.0.0
+opencv-contrib-python>=4.8.0
